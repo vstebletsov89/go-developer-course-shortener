@@ -17,15 +17,15 @@ const (
 
 var Repository = make(map[int]string)
 
-func GetNextId() int {
+func GetNextID() int {
 	return len(Repository) + 1
 }
 
 func HandlerShortener(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		strId := r.URL.Path
-		id, err := strconv.Atoi(strId[1:])
+		strID := r.URL.Path
+		id, err := strconv.Atoi(strID[1:])
 		if err != nil || id < 1 {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -53,7 +53,7 @@ func HandlerShortener(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		id := GetNextId()
+		id := GetNextID()
 		Repository[id] = longURL.String()
 		shortURL := fmt.Sprintf("http://%v/%d", serverAddress, id)
 		log.Printf("Short URL: %v", shortURL)
