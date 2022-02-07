@@ -1,25 +1,15 @@
-package main
+package handlers
 
 import (
 	"fmt"
+	"go-developer-course-shortener/configs"
+	"go-developer-course-shortener/internal/app/storage"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
 )
-
-const (
-	serverHost    = "localhost"
-	serverPort    = "8080"
-	serverAddress = serverHost + ":" + serverPort
-)
-
-var Repository = make(map[int]string)
-
-func GetNextID() int {
-	return len(Repository) + 1
-}
 
 func HandlerShortener(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -31,7 +21,7 @@ func HandlerShortener(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("ID: %d", id)
-		originalURL := Repository[id]
+		originalURL := storage.GetURL(id)
 		if originalURL == "" {
 			http.Error(w, "ID not found", http.StatusBadRequest)
 			return
@@ -53,11 +43,11 @@ func HandlerShortener(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		id := GetNextID()
-		Repository[id] = longURL.String()
-		shortURL := fmt.Sprintf("http://%v/%d", serverAddress, id)
+		id := storage.SaveURL(longURL.String())
+		shortURL := fmt.Sprintf("http://%v/%d", configs.ServerAddress, id)
 		log.Printf("Short URL: %v", shortURL)
 
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusCreated)
 		_, err = w.Write([]byte(shortURL))
 		if err != nil {
@@ -68,12 +58,4 @@ func HandlerShortener(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Printf("Unexpected error")
 	}
-}
-
-func main() {
-	log.Printf("Server started on %v\n", serverAddress)
-	// маршрутизация запросов обработчику
-	http.HandleFunc("/", HandlerShortener)
-	// запуск сервера с адресом localhost, порт 8080
-	log.Fatal(http.ListenAndServe(serverAddress, nil))
 }
