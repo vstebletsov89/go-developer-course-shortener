@@ -1,4 +1,4 @@
-package storage
+package repository
 
 var Repository = make(map[int]string)
 

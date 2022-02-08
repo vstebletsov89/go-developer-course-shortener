@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"go-developer-course-shortener/internal/app/storage"
+	"go-developer-course-shortener/internal/app/repository"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -47,7 +47,7 @@ func TestHandlerShortenerGetSuccess(t *testing.T) {
 	res := w2.Result()
 
 	assert.Equal(t, "https://github.com/test_repo1", res.Header.Get("Location"))
-	storage.InitRepository()
+	repository.InitRepository()
 }
 
 func TestHandlerShortenerGetError(t *testing.T) {

@@ -3,7 +3,7 @@ package handlers
 import (
 	"fmt"
 	"go-developer-course-shortener/configs"
-	"go-developer-course-shortener/internal/app/storage"
+	"go-developer-course-shortener/internal/app/repository"
 	"io"
 	"log"
 	"net/http"
@@ -21,7 +21,7 @@ func HandlerShortener(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		log.Printf("ID: %d", id)
-		originalURL := storage.GetURL(id)
+		originalURL := repository.GetURL(id)
 		if originalURL == "" {
 			http.Error(w, "ID not found", http.StatusBadRequest)
 			return
@@ -46,7 +46,7 @@ func HandlerShortener(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "URL must not be empty", http.StatusBadRequest)
 			return
 		}
-		id := storage.SaveURL(longURL.String())
+		id := repository.SaveURL(longURL.String())
 		shortURL := fmt.Sprintf("http://%v/%d", configs.ServerAddress, id)
 		log.Printf("Short URL: %v", shortURL)
 

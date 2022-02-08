@@ -5,9 +5,11 @@ import (
 	"go-developer-course-shortener/internal/app/handlers"
 	"log"
 	"net/http"
+	"os"
 )
 
 func main() {
+	log.SetOutput(os.Stdout)
 	log.Printf("Server started on %v\n", configs.ServerAddress)
 	// маршрутизация запросов обработчику
 	http.HandleFunc("/", handlers.HandlerShortener)
