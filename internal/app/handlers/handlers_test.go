@@ -2,16 +2,107 @@ package handlers
 
 import (
 	"bytes"
+	"fmt"
+	"github.com/stretchr/testify/assert"
+	"go-developer-course-shortener/internal/app/storage"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
-//TODO: check 6 bad requests + one incorrect (not GET, not POST request)
-//TODO: add tests for POST (all error and edge cases)
-//TODO: add test for GET (all error and edge cases)
-//TODO: add test for POST -> GET (positive + positive)
+func TestHandlerShortenerInvalidMethod(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPatch, "/", bytes.NewBufferString("https://practicum.yandex.ru/learn/go-developer/courses/"))
+
+	w := httptest.NewRecorder()
+	h := http.HandlerFunc(HandlerShortener)
+	h.ServeHTTP(w, request)
+	res := w.Result()
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	defer res.Body.Close()
+	_, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, "Unexpected error\n", w.Body.String())
+	assert.Equal(t, "text/plain; charset=utf-8", res.Header.Get("Content-Type"))
+}
+
+func TestHandlerShortenerGetSuccess(t *testing.T) {
+	//сначала подготавливаем сокращенную ссылку через POST
+	r := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo1"))
+	w := httptest.NewRecorder()
+	h := http.HandlerFunc(HandlerShortener)
+	h.ServeHTTP(w, r)
+	assert.Equal(t, http.StatusCreated, w.Code)
+
+	r2 := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/%d", 1), nil)
+
+	w2 := httptest.NewRecorder()
+	h2 := http.HandlerFunc(HandlerShortener)
+	h2.ServeHTTP(w2, r2)
+	res := w2.Result()
+
+	assert.Equal(t, "https://github.com/test_repo1", res.Header.Get("Location"))
+	storage.InitRepository()
+}
+
+func TestHandlerShortenerGetError(t *testing.T) {
+	type want struct {
+		headerLocation string
+		statusCode     int
+		responseBody   string
+	}
+	tests := []struct {
+		name string
+		id   int
+		want want
+	}{
+		{
+			name: "Test #1",
+			id:   999,
+			want: want{
+				headerLocation: "",
+				statusCode:     http.StatusBadRequest,
+				responseBody:   "ID not found\n",
+			},
+		},
+		{
+			name: "Test #2",
+			id:   -555,
+			want: want{
+				headerLocation: "",
+				statusCode:     http.StatusBadRequest,
+				responseBody:   "Invalid ID\n",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/%d", tt.id), nil)
+
+			w := httptest.NewRecorder()
+			h := http.HandlerFunc(HandlerShortener)
+			h.ServeHTTP(w, request)
+			res := w.Result()
+
+			assert.Equal(t, tt.want.statusCode, w.Code)
+
+			defer res.Body.Close()
+			_, err := io.ReadAll(res.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			assert.Equal(t, tt.want.responseBody, w.Body.String())
+			assert.Equal(t, tt.want.headerLocation, res.Header.Get("Location"))
+		})
+	}
+}
+
 func TestHandlerShortenerPost(t *testing.T) {
 	type want struct {
 		contentType  string
@@ -32,6 +123,24 @@ func TestHandlerShortenerPost(t *testing.T) {
 				responseBody: "http://localhost:8080/1",
 			},
 		},
+		{
+			name:    "Test #2",
+			longURL: "",
+			want: want{
+				contentType:  "text/plain; charset=utf-8",
+				statusCode:   http.StatusBadRequest,
+				responseBody: "URL must not be empty\n",
+			},
+		},
+		{
+			name:    "Test #3",
+			longURL: "htt p://incorrect_url_here",
+			want: want{
+				contentType:  "text/plain; charset=utf-8",
+				statusCode:   http.StatusBadRequest,
+				responseBody: "parse \"htt p://incorrect_url_here\": first path segment in URL cannot contain colon\n",
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -42,22 +151,16 @@ func TestHandlerShortenerPost(t *testing.T) {
 			h.ServeHTTP(w, request)
 			res := w.Result()
 
-			if res.StatusCode != tt.want.statusCode {
-				t.Errorf("Expected status code %d, got %d", tt.want.statusCode, w.Code)
-			}
+			assert.Equal(t, tt.want.statusCode, w.Code)
 
 			defer res.Body.Close()
-			resBody, err := io.ReadAll(res.Body)
+			_, err := io.ReadAll(res.Body)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(resBody) != tt.want.responseBody {
-				t.Errorf("Expected body %s, got %s", tt.want.responseBody, w.Body.String())
-			}
 
-			if res.Header.Get("Content-Type") != tt.want.contentType {
-				t.Errorf("Expected Content-Type %s, got %s", tt.want.contentType, res.Header.Get("Content-Type"))
-			}
+			assert.Equal(t, tt.want.responseBody, w.Body.String())
+			assert.Equal(t, tt.want.contentType, res.Header.Get("Content-Type"))
 		})
 	}
 }

@@ -2,6 +2,10 @@ package storage
 
 var Repository = make(map[int]string)
 
+func InitRepository() {
+	Repository = make(map[int]string)
+}
+
 func getNextID() int {
 	return len(Repository) + 1
 }

@@ -17,7 +17,7 @@ func HandlerShortener(w http.ResponseWriter, r *http.Request) {
 		strID := r.URL.Path
 		id, err := strconv.Atoi(strID[1:])
 		if err != nil || id < 1 {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "Invalid ID", http.StatusBadRequest)
 			return
 		}
 		log.Printf("ID: %d", id)
@@ -42,7 +42,10 @@ func HandlerShortener(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
+		if longURL.String() == "" {
+			http.Error(w, "URL must not be empty", http.StatusBadRequest)
+			return
+		}
 		id := storage.SaveURL(longURL.String())
 		shortURL := fmt.Sprintf("http://%v/%d", configs.ServerAddress, id)
 		log.Printf("Short URL: %v", shortURL)
@@ -55,7 +58,7 @@ func HandlerShortener(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		w.WriteHeader(http.StatusBadRequest)
-		log.Printf("Unexpected error")
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		http.Error(w, "Unexpected error", http.StatusBadRequest)
 	}
 }

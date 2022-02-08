@@ -25,7 +25,7 @@ func TestGetURL(t *testing.T) {
 		})
 	}
 	//очищаем репозиторий
-	Repository = make(map[int]string)
+	InitRepository()
 }
 
 func TestSaveURL(t *testing.T) {
@@ -44,5 +44,5 @@ func TestSaveURL(t *testing.T) {
 		})
 	}
 	//очищаем репозиторий
-	Repository = make(map[int]string)
+	InitRepository()
 }
