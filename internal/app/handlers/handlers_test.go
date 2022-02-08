@@ -45,6 +45,7 @@ func TestHandlerShortenerGetSuccess(t *testing.T) {
 	h2 := http.HandlerFunc(HandlerShortener)
 	h2.ServeHTTP(w2, r2)
 	res := w2.Result()
+	defer res.Body.Close()
 
 	assert.Equal(t, "https://github.com/test_repo1", res.Header.Get("Location"))
 	repository.InitRepository()
