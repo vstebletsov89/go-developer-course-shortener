@@ -22,8 +22,8 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	// маршрутизация запросов обработчику
-	r.Get("/", handlers.HandlerShortener)
-	r.Post("/", handlers.HandlerShortener)
+	r.Post("/", handlers.HandlerPOST)
+	r.Get("/", handlers.HandlerGET)
 
 	// запуск сервера с адресом localhost, порт 8080
 	log.Fatal(http.ListenAndServe(configs.ServerAddress, r))
