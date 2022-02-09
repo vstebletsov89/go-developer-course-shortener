@@ -38,7 +38,6 @@ func HandlerPOST(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	return
 }
 
 func HandlerGET(w http.ResponseWriter, r *http.Request) {
@@ -57,5 +56,4 @@ func HandlerGET(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Original URL: %s", originalURL)
 	w.Header().Add("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
-	return
 }
