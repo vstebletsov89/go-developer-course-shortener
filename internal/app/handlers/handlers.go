@@ -42,6 +42,7 @@ func HandlerPOST(w http.ResponseWriter, r *http.Request) {
 
 func HandlerGET(w http.ResponseWriter, r *http.Request) {
 	strID := r.URL.Path
+	log.Printf("strID: `%s`", strID)
 	id, err := strconv.Atoi(strID[1:])
 	if err != nil || id < 1 {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
