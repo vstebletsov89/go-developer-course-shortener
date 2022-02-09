@@ -16,7 +16,7 @@ func main() {
 
 	// маршрутизация запросов обработчику
 	r.Post("/", handlers.HandlerPOST)
-	r.Get("/", handlers.HandlerGET)
+	r.Get("/{ID}", handlers.HandlerGET)
 
 	// запуск сервера с адресом localhost, порт 8080
 	log.Fatal(http.ListenAndServe(configs.ServerAddress, r))
