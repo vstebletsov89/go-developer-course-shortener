@@ -54,6 +54,7 @@ func HandlerGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("Original URL: %s", originalURL)
-	w.Header().Add("Location", originalURL)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
