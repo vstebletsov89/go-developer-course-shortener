@@ -62,11 +62,12 @@ func TestBothHandlers(t *testing.T) {
 
 	//сначала подготавливаем сокращенную ссылку через POST
 	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo1"))
+	defer resp.Body.Close()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, body, "http://localhost:8080/1")
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, body = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 1), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 1), nil)
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 	repository.InitRepository()
@@ -110,6 +111,7 @@ func TestHandlerGetErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, body := testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", tt.id), nil)
+			defer resp.Body.Close()
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 			assert.Equal(t, tt.want.responseBody, body)
 			assert.Equal(t, tt.want.headerLocation, resp.Header.Get("Location"))
@@ -163,6 +165,7 @@ func TestHandlerPost(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(tt.longURL))
+			defer resp.Body.Close()
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 			assert.Equal(t, tt.want.responseBody, body)
 			assert.Equal(t, tt.want.contentType, resp.Header.Get(configs.ContentType))
