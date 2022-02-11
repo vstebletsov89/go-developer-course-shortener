@@ -68,6 +68,7 @@ func TestBothHandlers(t *testing.T) {
 
 	//получаем оригинальную ссылку через GET запрос
 	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 1), nil)
+	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 	repository.InitRepository()
