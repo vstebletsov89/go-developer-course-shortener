@@ -2,8 +2,8 @@ package main
 
 import (
 	"github.com/go-chi/chi/v5"
-	"go-developer-course-shortener/configs"
 	"go-developer-course-shortener/internal/app/handlers"
+	"go-developer-course-shortener/internal/configs"
 	"log"
 	"net/http"
 	"os"

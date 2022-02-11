@@ -1,5 +1,7 @@
 package repository
 
+import "fmt"
+
 var Repository = make(map[int]string)
 
 func InitRepository() {
@@ -16,10 +18,10 @@ func SaveURL(URL string) int {
 	return id
 }
 
-func GetURL(id int) string {
+func GetURL(id int) (string, error) {
 	URL, ok := Repository[id]
 	if !ok {
-		return ""
+		return "", fmt.Errorf("not found")
 	}
-	return URL
+	return URL, nil
 }

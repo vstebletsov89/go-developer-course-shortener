@@ -3,31 +3,72 @@ package handlers
 import (
 	"bytes"
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"go-developer-course-shortener/internal/app/repository"
+	"go-developer-course-shortener/internal/configs"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
+func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io.Reader) (*http.Response, string) {
+	req, err := http.NewRequest(method, ts.URL+path, body)
+	if err != nil {
+		t.Fatal(err)
+		return nil, ""
+	}
+
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+		return nil, ""
+	}
+
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+		return nil, ""
+	}
+	defer resp.Body.Close()
+
+	return resp, string(respBody)
+}
+
+func NewRouter() chi.Router {
+	r := chi.NewRouter()
+
+	r.Route("/",
+		func(r chi.Router) {
+			r.Get("/{ID}", HandlerGET)
+			r.Post("/", HandlerPOST)
+		})
+
+	return r
+}
+
 func TestBothHandlers(t *testing.T) {
+	r := NewRouter()
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
 	//сначала подготавливаем сокращенную ссылку через POST
-	r := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo1"))
-	w := httptest.NewRecorder()
-	h := http.HandlerFunc(HandlerPOST)
-	h.ServeHTTP(w, r)
-	assert.Equal(t, http.StatusCreated, w.Code)
+	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo1"))
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.Equal(t, body, "http://localhost:8080/1")
 
-	r2 := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/%d", 1), nil)
-
-	w2 := httptest.NewRecorder()
-	h2 := http.HandlerFunc(HandlerGET)
-	h2.ServeHTTP(w2, r2)
-	res := w2.Result()
-	defer res.Body.Close()
-
-	assert.Equal(t, "https://github.com/test_repo1", res.Header.Get("Location"))
+	//получаем оригинальную ссылку через GET запрос
+	resp, body = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 1), nil)
+	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
+	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 	repository.InitRepository()
 }
 
@@ -61,25 +102,17 @@ func TestHandlerGetErrors(t *testing.T) {
 			},
 		},
 	}
+
+	r := NewRouter()
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/%d", tt.id), nil)
-
-			w := httptest.NewRecorder()
-			h := http.HandlerFunc(HandlerGET)
-			h.ServeHTTP(w, request)
-			res := w.Result()
-
-			assert.Equal(t, tt.want.statusCode, w.Code)
-
-			defer res.Body.Close()
-			_, err := io.ReadAll(res.Body)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			assert.Equal(t, tt.want.responseBody, w.Body.String())
-			assert.Equal(t, tt.want.headerLocation, res.Header.Get("Location"))
+			resp, body := testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", tt.id), nil)
+			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
+			assert.Equal(t, tt.want.responseBody, body)
+			assert.Equal(t, tt.want.headerLocation, resp.Header.Get("Location"))
 		})
 	}
 }
@@ -99,7 +132,7 @@ func TestHandlerPost(t *testing.T) {
 			name:    "Test #1",
 			longURL: "https://practicum.yandex.ru/learn/go-developer/courses/",
 			want: want{
-				contentType:  "text/plain; charset=utf-8",
+				contentType:  configs.ContentValue,
 				statusCode:   http.StatusCreated,
 				responseBody: "http://localhost:8080/1",
 			},
@@ -108,7 +141,7 @@ func TestHandlerPost(t *testing.T) {
 			name:    "Test #2",
 			longURL: "",
 			want: want{
-				contentType:  "text/plain; charset=utf-8",
+				contentType:  configs.ContentValue,
 				statusCode:   http.StatusBadRequest,
 				responseBody: "URL must not be empty\n",
 			},
@@ -117,31 +150,22 @@ func TestHandlerPost(t *testing.T) {
 			name:    "Test #3",
 			longURL: "htt p://incorrect_url_here",
 			want: want{
-				contentType:  "text/plain; charset=utf-8",
+				contentType:  configs.ContentValue,
 				statusCode:   http.StatusBadRequest,
 				responseBody: "parse \"htt p://incorrect_url_here\": first path segment in URL cannot contain colon\n",
 			},
 		},
 	}
+	r := NewRouter()
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			request := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(tt.longURL))
-
-			w := httptest.NewRecorder()
-			h := http.HandlerFunc(HandlerPOST)
-			h.ServeHTTP(w, request)
-			res := w.Result()
-
-			assert.Equal(t, tt.want.statusCode, w.Code)
-
-			defer res.Body.Close()
-			_, err := io.ReadAll(res.Body)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			assert.Equal(t, tt.want.responseBody, w.Body.String())
-			assert.Equal(t, tt.want.contentType, res.Header.Get("Content-Type"))
+			resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(tt.longURL))
+			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
+			assert.Equal(t, tt.want.responseBody, body)
+			assert.Equal(t, tt.want.contentType, resp.Header.Get(configs.ContentType))
 		})
 	}
 }

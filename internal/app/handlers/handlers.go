@@ -2,8 +2,9 @@ package handlers
 
 import (
 	"fmt"
-	"go-developer-course-shortener/configs"
+	"github.com/go-chi/chi/v5"
 	"go-developer-course-shortener/internal/app/repository"
+	"go-developer-course-shortener/internal/configs"
 	"io"
 	"log"
 	"net/http"
@@ -31,7 +32,7 @@ func HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	shortURL := fmt.Sprintf("http://%v/%d", configs.ServerAddress, id)
 	log.Printf("Short URL: %v", shortURL)
 
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set(configs.ContentType, configs.ContentValue)
 	w.WriteHeader(http.StatusCreated)
 	_, err = w.Write([]byte(shortURL))
 	if err != nil {
@@ -41,21 +42,21 @@ func HandlerPOST(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandlerGET(w http.ResponseWriter, r *http.Request) {
-	strID := r.URL.Path
+	strID := chi.URLParam(r, "ID")
 	log.Printf("strID: `%s`", strID)
-	id, err := strconv.Atoi(strID[1:])
+	id, err := strconv.Atoi(strID)
 	if err != nil || id < 1 {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
 	log.Printf("ID: %d", id)
-	originalURL := repository.GetURL(id)
-	if originalURL == "" {
+	originalURL, err := repository.GetURL(id)
+	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)
 		return
 	}
 	log.Printf("Original URL: %s", originalURL)
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set(configs.ContentType, configs.ContentValue)
 	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
