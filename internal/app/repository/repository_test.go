@@ -21,7 +21,8 @@ func TestGetURL(t *testing.T) {
 	SaveURL("http://localhost:8080/test_long_url3")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, GetURL(tt.id))
+			URL, _ := GetURL(tt.id)
+			assert.Equal(t, tt.want, URL)
 		})
 	}
 	//очищаем репозиторий
