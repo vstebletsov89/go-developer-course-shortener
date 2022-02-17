@@ -21,7 +21,7 @@ type ResponseJSON struct {
 	Result string `json:"result"`
 }
 
-func HandlerJsonPOST(w http.ResponseWriter, r *http.Request) {
+func HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	var request RequestJSON
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -72,7 +72,7 @@ func HandlerPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set(configs.ContentType, configs.ContentValue)
+	w.Header().Set(configs.ContentType, configs.ContentValuePlainText)
 	w.WriteHeader(http.StatusCreated)
 	_, err = w.Write([]byte(shortURL))
 	if err != nil {
@@ -96,7 +96,7 @@ func HandlerGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("Original URL: %s", originalURL)
-	w.Header().Set(configs.ContentType, configs.ContentValue)
+	w.Header().Set(configs.ContentType, configs.ContentValuePlainText)
 	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }

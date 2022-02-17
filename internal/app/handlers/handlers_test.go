@@ -50,7 +50,7 @@ func NewRouter() chi.Router {
 		func(r chi.Router) {
 			r.Get("/{ID}", HandlerGET)
 			r.Post("/", HandlerPOST)
-			r.Post("/api/shorten", HandlerJsonPOST)
+			r.Post("/api/shorten", HandlerJSONPOST)
 		})
 
 	return r
@@ -155,7 +155,7 @@ func TestHandlerPost(t *testing.T) {
 			name:    "Test #1",
 			longURL: "https://practicum.yandex.ru/learn/go-developer/courses/",
 			want: want{
-				contentType:  configs.ContentValue,
+				contentType:  configs.ContentValuePlainText,
 				statusCode:   http.StatusCreated,
 				responseBody: "http://localhost:8080/1",
 			},
@@ -164,7 +164,7 @@ func TestHandlerPost(t *testing.T) {
 			name:    "Test #2",
 			longURL: "",
 			want: want{
-				contentType:  configs.ContentValue,
+				contentType:  configs.ContentValuePlainText,
 				statusCode:   http.StatusBadRequest,
 				responseBody: "URL must not be empty\n",
 			},
@@ -173,7 +173,7 @@ func TestHandlerPost(t *testing.T) {
 			name:    "Test #3",
 			longURL: "htt p://incorrect_url_here",
 			want: want{
-				contentType:  configs.ContentValue,
+				contentType:  configs.ContentValuePlainText,
 				statusCode:   http.StatusBadRequest,
 				responseBody: "parse \"htt p://incorrect_url_here\": first path segment in URL cannot contain colon\n",
 			},
@@ -221,7 +221,7 @@ func TestHandlerJsonPost(t *testing.T) {
 			name:     "test invalid format for JSON request",
 			jsonBody: `{"invalid": "<some_url>"}`,
 			want: want{
-				contentType:  configs.ContentValue,
+				contentType:  configs.ContentValuePlainText,
 				statusCode:   http.StatusBadRequest,
 				responseBody: "Invalid JSON format in request body. Expected: {\"url\": \"<some_url>\"}\n",
 				checkJSON:    false,
@@ -231,7 +231,7 @@ func TestHandlerJsonPost(t *testing.T) {
 			name:     "test invalid input for decoder",
 			jsonBody: `{"url": "invalid\github.com/test_repo"}`,
 			want: want{
-				contentType:  configs.ContentValue,
+				contentType:  configs.ContentValuePlainText,
 				statusCode:   http.StatusBadRequest,
 				responseBody: "invalid character 'g' in string escape code\n",
 				checkJSON:    false,
@@ -241,7 +241,7 @@ func TestHandlerJsonPost(t *testing.T) {
 			name:     "test empty input URL",
 			jsonBody: `{"url": ""}`,
 			want: want{
-				contentType:  configs.ContentValue,
+				contentType:  configs.ContentValuePlainText,
 				statusCode:   http.StatusBadRequest,
 				responseBody: "Invalid JSON format in request body. Expected: {\"url\": \"<some_url>\"}\n",
 				checkJSON:    false,

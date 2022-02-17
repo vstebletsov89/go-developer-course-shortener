@@ -16,7 +16,7 @@ func main() {
 
 	// маршрутизация запросов обработчику
 	r.Post("/", handlers.HandlerPOST)
-	r.Post("/api/shorten", handlers.HandlerJsonPOST)
+	r.Post("/api/shorten", handlers.HandlerJSONPOST)
 	r.Get("/{ID}", handlers.HandlerGET)
 
 	// запуск сервера с адресом localhost, порт 8080
