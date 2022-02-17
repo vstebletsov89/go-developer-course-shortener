@@ -50,6 +50,7 @@ func NewRouter() chi.Router {
 		func(r chi.Router) {
 			r.Get("/{ID}", HandlerGET)
 			r.Post("/", HandlerPOST)
+			r.Post("/api/shorten", HandlerJsonPOST)
 		})
 
 	return r
@@ -65,6 +66,25 @@ func TestBothHandlers(t *testing.T) {
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, body, "http://localhost:8080/1")
+
+	//получаем оригинальную ссылку через GET запрос
+	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 1), nil)
+	defer resp.Body.Close()
+	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
+	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
+	repository.InitRepository()
+}
+
+func TestBothHandlersWithJSON(t *testing.T) {
+	r := NewRouter()
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	//сначала подготавливаем сокращенную ссылку через POST /api/shorten
+	resp, body := testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.JSONEq(t, body, "{\"result\":\"http://localhost:8080/1\"}")
 
 	//получаем оригинальную ссылку через GET запрос
 	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 1), nil)
@@ -172,4 +192,80 @@ func TestHandlerPost(t *testing.T) {
 			assert.Equal(t, tt.want.contentType, resp.Header.Get(configs.ContentType))
 		})
 	}
+	repository.InitRepository()
+}
+
+func TestHandlerJsonPost(t *testing.T) {
+	type want struct {
+		contentType  string
+		statusCode   int
+		responseBody string
+		checkJSON    bool
+	}
+	tests := []struct {
+		name     string
+		jsonBody string
+		want     want
+	}{
+		{
+			name:     "test valid JSON request",
+			jsonBody: `{"url": "<some_url>"}`,
+			want: want{
+				contentType:  configs.ContentValueJSON,
+				statusCode:   http.StatusCreated,
+				responseBody: `{"result": "http://localhost:8080/1"}`,
+				checkJSON:    true,
+			},
+		},
+		{
+			name:     "test invalid format for JSON request",
+			jsonBody: `{"invalid": "<some_url>"}`,
+			want: want{
+				contentType:  configs.ContentValue,
+				statusCode:   http.StatusBadRequest,
+				responseBody: "Invalid JSON format in request body. Expected: {\"url\": \"<some_url>\"}\n",
+				checkJSON:    false,
+			},
+		},
+		{
+			name:     "test invalid input for decoder",
+			jsonBody: `{"url": "invalid\github.com/test_repo"}`,
+			want: want{
+				contentType:  configs.ContentValue,
+				statusCode:   http.StatusBadRequest,
+				responseBody: "invalid character 'g' in string escape code\n",
+				checkJSON:    false,
+			},
+		},
+		{
+			name:     "test empty input URL",
+			jsonBody: `{"url": ""}`,
+			want: want{
+				contentType:  configs.ContentValue,
+				statusCode:   http.StatusBadRequest,
+				responseBody: "Invalid JSON format in request body. Expected: {\"url\": \"<some_url>\"}\n",
+				checkJSON:    false,
+			},
+		},
+	}
+	r := NewRouter()
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, body := testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(tt.jsonBody))
+			defer resp.Body.Close()
+			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
+
+			if tt.want.checkJSON {
+				assert.JSONEq(t, tt.want.responseBody, body)
+			} else {
+				assert.Equal(t, tt.want.responseBody, body)
+			}
+
+			assert.Equal(t, tt.want.contentType, resp.Header.Get(configs.ContentType))
+		})
+	}
+	repository.InitRepository()
 }
