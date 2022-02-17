@@ -45,6 +45,7 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io
 
 func NewRouter() chi.Router {
 	r := chi.NewRouter()
+	configs.InitConfiguration()
 
 	r.Route("/",
 		func(r chi.Router) {

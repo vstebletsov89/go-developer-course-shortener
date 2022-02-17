@@ -19,7 +19,7 @@ func MakeShortURL(strURL string) (string, error) {
 		return "", errors.New("URL must not be empty")
 	}
 	id := repository.SaveURL(longURL.String())
-	shortURL := fmt.Sprintf("http://%v/%d", configs.ServerAddress, id)
+	shortURL := fmt.Sprintf("%v/%d", configs.EnvConfig.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
 	return shortURL, nil
 }

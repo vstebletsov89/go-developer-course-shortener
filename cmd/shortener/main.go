@@ -11,7 +11,9 @@ import (
 
 func main() {
 	log.SetOutput(os.Stdout)
-	log.Printf("Server started on %v\n", configs.ServerAddress)
+	configs.InitConfiguration()
+
+	log.Printf("Server started on %v", configs.EnvConfig.ServerAddress)
 	r := chi.NewRouter()
 
 	// маршрутизация запросов обработчику
@@ -20,5 +22,5 @@ func main() {
 	r.Get("/{ID}", handlers.HandlerGET)
 
 	// запуск сервера с адресом localhost, порт 8080
-	log.Fatal(http.ListenAndServe(configs.ServerAddress, r))
+	log.Fatal(http.ListenAndServe(configs.EnvConfig.ServerAddress, r))
 }
