@@ -9,8 +9,10 @@ import (
 	"go-developer-course-shortener/internal/configs"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -44,17 +46,127 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io
 }
 
 func NewRouter() chi.Router {
-	r := chi.NewRouter()
-	configs.InitConfiguration()
+	config := configs.ReadConfig()
+	storage := repository.NewRepository(config.FileStoragePath)
+	handler := NewHTTPHandler(config, storage)
 
-	r.Route("/",
-		func(r chi.Router) {
-			r.Get("/{ID}", HandlerGET)
-			r.Post("/", HandlerPOST)
-			r.Post("/api/shorten", HandlerJSONPOST)
-		})
+	log.Printf("Server started on %v", config.ServerAddress)
+	r := chi.NewRouter()
+
+	// маршрутизация запросов обработчику
+	r.Post("/", handler.HandlerPOST)
+	r.Post("/api/shorten", handler.HandlerJSONPOST)
+	r.Get("/{ID}", handler.HandlerGET)
 
 	return r
+}
+
+func TestBothHandlersFileStorageInvalidRecord(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	file, err := os.CreateTemp(homeDir, "test")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.RemoveAll(file.Name())
+
+	log.Printf("Temporary file name: %s", file.Name())
+	os.Setenv("FILE_STORAGE_PATH", file.Name())
+
+	r := NewRouter()
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	//сначала подготавливаем сокращенную ссылку через POST
+	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo1"))
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.Equal(t, body, "http://localhost:8080/1")
+
+	//получаем оригинальную ссылку через GET запрос
+	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 999), nil)
+	defer resp.Body.Close()
+	assert.Equal(t, "", resp.Header.Get("Location"))
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestBothHandlersFileStorageOneRecord(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	file, err := os.CreateTemp(homeDir, "test")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.RemoveAll(file.Name())
+
+	log.Printf("Temporary file name: %s", file.Name())
+	os.Setenv("FILE_STORAGE_PATH", file.Name())
+
+	r := NewRouter()
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	//сначала подготавливаем сокращенную ссылку через POST
+	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo1"))
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.Equal(t, body, "http://localhost:8080/1")
+
+	//получаем оригинальную ссылку через GET запрос
+	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 1), nil)
+	defer resp.Body.Close()
+	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
+	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
+}
+
+func TestBothHandlersFileStorageTwoRecords(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	file, err := os.CreateTemp(homeDir, "test")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.RemoveAll(file.Name())
+
+	log.Printf("Temporary file name: %s", file.Name())
+	os.Setenv("FILE_STORAGE_PATH", file.Name())
+
+	r := NewRouter()
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	//сначала подготавливаем сокращенную ссылку через POST
+	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo1"))
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.Equal(t, body, "http://localhost:8080/1")
+
+	//сначала подготавливаем сокращенную ссылку через POST
+	resp, body = testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo2"))
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.Equal(t, body, "http://localhost:8080/2")
+
+	//получаем оригинальную ссылку через GET запрос
+	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 2), nil)
+	defer resp.Body.Close()
+	assert.Equal(t, "https://github.com/test_repo2", resp.Header.Get("Location"))
+	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
+
+	//получаем оригинальную ссылку через GET запрос
+	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 1), nil)
+	defer resp.Body.Close()
+	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
+	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 }
 
 func TestBothHandlers(t *testing.T) {
@@ -73,7 +185,6 @@ func TestBothHandlers(t *testing.T) {
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
-	repository.InitRepository()
 }
 
 func TestBothHandlersWithJSON(t *testing.T) {
@@ -92,7 +203,6 @@ func TestBothHandlersWithJSON(t *testing.T) {
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
-	repository.InitRepository()
 }
 
 func TestHandlerGetErrors(t *testing.T) {
@@ -193,7 +303,6 @@ func TestHandlerPost(t *testing.T) {
 			assert.Equal(t, tt.want.contentType, resp.Header.Get(configs.ContentType))
 		})
 	}
-	repository.InitRepository()
 }
 
 func TestHandlerJsonPost(t *testing.T) {
@@ -268,5 +377,4 @@ func TestHandlerJsonPost(t *testing.T) {
 			assert.Equal(t, tt.want.contentType, resp.Header.Get(configs.ContentType))
 		})
 	}
-	repository.InitRepository()
 }

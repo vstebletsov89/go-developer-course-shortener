@@ -13,6 +13,11 @@ import (
 	"strconv"
 )
 
+type Handler struct {
+	config  *configs.Config
+	storage *repository.Repository
+}
+
 type RequestJSON struct {
 	URL string `json:"url"`
 }
@@ -21,7 +26,11 @@ type ResponseJSON struct {
 	Result string `json:"result"`
 }
 
-func HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
+func NewHTTPHandler(cfg *configs.Config, s *repository.Repository) *Handler {
+	return &Handler{config: cfg, storage: s}
+}
+
+func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	var request RequestJSON
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -34,7 +43,7 @@ func HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Request JSON: %+v", request)
 
-	shortURL, err := utils.MakeShortURL(string(request.URL))
+	shortURL, err := utils.SaveShortURL(h.storage, request.URL, h.config.BaseURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -59,14 +68,14 @@ func HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func HandlerPOST(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	shortURL, err := utils.MakeShortURL(string(body))
+	shortURL, err := utils.SaveShortURL(h.storage, string(body), h.config.BaseURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -81,7 +90,7 @@ func HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func HandlerGET(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	strID := chi.URLParam(r, "ID")
 	log.Printf("strID: `%s`", strID)
 	id, err := strconv.Atoi(strID)
@@ -90,7 +99,7 @@ func HandlerGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("ID: %d", id)
-	originalURL, err := repository.GetURL(id)
+	originalURL, err := h.storage.GetURL(id)
 	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)
 		return

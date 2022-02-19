@@ -6,18 +6,19 @@ import (
 )
 
 type Config struct {
-	ServerAddress string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
-	BaseURL       string `env:"BASE_URL" envDefault:"http://localhost:8080"`
+	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
+	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080"`
+	FileStoragePath string `env:"FILE_STORAGE_PATH" envDefault:"FILE_STORAGE_PATH_NOT_DEFINED""`
 }
 
-var EnvConfig Config
-
-func InitConfiguration() {
-	err := env.Parse(&EnvConfig)
+func ReadConfig() *Config {
+	var cfg Config
+	err := env.Parse(&cfg)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Printf("%+v\n\n", EnvConfig)
+	log.Printf("%+v\n\n", cfg)
+	return &cfg
 }
