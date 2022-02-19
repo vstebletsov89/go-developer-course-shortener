@@ -75,6 +75,7 @@ func TestBothHandlersFileStorageInvalidRecord(t *testing.T) {
 
 	log.Printf("Temporary file name: %s", file.Name())
 	os.Setenv("FILE_STORAGE_PATH", file.Name())
+	defer os.Unsetenv("FILE_STORAGE_PATH")
 
 	r := NewRouter()
 	ts := httptest.NewServer(r)
@@ -107,6 +108,7 @@ func TestBothHandlersFileStorageOneRecord(t *testing.T) {
 
 	log.Printf("Temporary file name: %s", file.Name())
 	os.Setenv("FILE_STORAGE_PATH", file.Name())
+	defer os.Unsetenv("FILE_STORAGE_PATH")
 
 	r := NewRouter()
 	ts := httptest.NewServer(r)
@@ -139,6 +141,7 @@ func TestBothHandlersFileStorageTwoRecords(t *testing.T) {
 
 	log.Printf("Temporary file name: %s", file.Name())
 	os.Setenv("FILE_STORAGE_PATH", file.Name())
+	defer os.Unsetenv("FILE_STORAGE_PATH")
 
 	r := NewRouter()
 	ts := httptest.NewServer(r)

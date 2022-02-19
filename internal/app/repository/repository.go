@@ -13,7 +13,6 @@ type Repository struct {
 	repositoryType  string
 	fileStoragePath string
 	inMemoryMap     map[int]string
-	counterURL      int
 }
 
 type FileRecord struct {
@@ -33,9 +32,26 @@ func NewRepository(fileStoragePath string) *Repository {
 }
 
 func (r *Repository) getNextID() int {
-	//TODO: read from file to count all records or get len of inMemoryMap
-	//TODO: remove counterURL
-	return r.counterURL + 1
+	if r.repositoryType == configs.RepositoryTypeFile {
+		file := OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE)
+		defer file.Close()
+
+		decoder := json.NewDecoder(file)
+		var counter int
+		for {
+			record := &FileRecord{}
+			if err := decoder.Decode(&record); err == io.EOF {
+				break
+			} else if err != nil {
+				log.Fatal(err)
+			}
+			log.Printf("Record from file: %+v", record)
+			counter += 1
+		}
+		return counter + 1
+	} else {
+		return len(r.inMemoryMap) + 1
+	}
 }
 
 func (r *Repository) SaveURL(URL string) int {
@@ -52,7 +68,6 @@ func (r *Repository) SaveURL(URL string) int {
 	} else {
 		r.inMemoryMap[id] = URL
 	}
-	r.counterURL += 1
 	return id
 }
 
