@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
 	"go-developer-course-shortener/internal/app/repository"
-	"go-developer-course-shortener/internal/app/utils"
 	"go-developer-course-shortener/internal/configs"
 	"io"
 	"log"
@@ -43,7 +42,7 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Request JSON: %+v", request)
 
-	shortURL, err := utils.SaveShortURL(h.storage, request.URL, h.config.BaseURL)
+	shortURL, err := h.storage.SaveShortURL(request.URL, h.config.BaseURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -75,7 +74,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL, err := utils.SaveShortURL(h.storage, string(body), h.config.BaseURL)
+	shortURL, err := h.storage.SaveShortURL(string(body), h.config.BaseURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

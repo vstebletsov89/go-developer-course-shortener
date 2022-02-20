@@ -2,10 +2,12 @@ package repository
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go-developer-course-shortener/internal/configs"
 	"io"
 	"log"
+	"net/url"
 	"os"
 )
 
@@ -106,4 +108,20 @@ func OpenFile(fileName string, flag int) *os.File {
 		log.Fatal(err)
 	}
 	return file
+}
+
+func (r *Repository) SaveShortURL(strURL string, baseURL string) (string, error) {
+	log.Printf("Long URL: %v", strURL)
+	longURL, err := url.Parse(strURL)
+	if err != nil {
+		return "", err
+	}
+	if longURL.String() == "" {
+		return "", errors.New("URL must not be empty")
+	}
+	id := r.SaveURL(longURL.String())
+
+	shortURL := fmt.Sprintf("%v/%d", baseURL, id)
+	log.Printf("Short URL: %v", shortURL)
+	return shortURL, nil
 }
