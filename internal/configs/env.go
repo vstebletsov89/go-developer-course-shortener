@@ -13,10 +13,7 @@ type Config struct {
 }
 
 func flagExists(name string) bool {
-	if flag.Lookup(name) == nil {
-		return false
-	}
-	return true
+	return flag.Lookup(name) != nil
 }
 
 func (c *Config) readCommandLineArgs() {
