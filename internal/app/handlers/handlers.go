@@ -100,10 +100,6 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	}
 	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
 
 	w.Header().Set(ContentType, ContentValuePlainText)
 	w.WriteHeader(http.StatusCreated)
