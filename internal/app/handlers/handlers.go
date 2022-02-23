@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
 	"go-developer-course-shortener/internal/app/repository"
+	"go-developer-course-shortener/internal/app/utils"
 	"go-developer-course-shortener/internal/configs"
 	"io"
 	"log"
@@ -42,11 +43,19 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Request JSON: %+v", request)
 
-	shortURL, err := repository.SaveShortURL(h.storage, request.URL, h.config.BaseURL)
+	log.Printf("Long URL: %v", request.URL)
+	longURL, err := utils.ParseURL(request.URL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	id, err := h.storage.SaveURL(longURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
+	log.Printf("Short URL: %v", shortURL)
 
 	response := ResponseJSON{Result: shortURL}
 	log.Printf("Response JSON: %+v", response)
@@ -61,7 +70,7 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Encoded JSON: %s", buf.String())
 
-	w.Header().Set(configs.ContentType, configs.ContentValueJSON)
+	w.Header().Set(ContentType, ContentValueJSON)
 	w.WriteHeader(http.StatusCreated)
 
 	_, err = w.Write(buf.Bytes())
@@ -78,13 +87,25 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL, err := repository.SaveShortURL(h.storage, string(body), h.config.BaseURL)
+	log.Printf("Long URL: %v", string(body))
+	longURL, err := utils.ParseURL(string(body))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	id, err := h.storage.SaveURL(longURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
+	log.Printf("Short URL: %v", shortURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Set(configs.ContentType, configs.ContentValuePlainText)
+	w.Header().Set(ContentType, ContentValuePlainText)
 	w.WriteHeader(http.StatusCreated)
 	_, err = w.Write([]byte(shortURL))
 	if err != nil {
@@ -108,7 +129,7 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("Original URL: %s", originalURL)
-	w.Header().Set(configs.ContentType, configs.ContentValuePlainText)
+	w.Header().Set(ContentType, ContentValuePlainText)
 	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }

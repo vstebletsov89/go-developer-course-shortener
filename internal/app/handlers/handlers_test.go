@@ -38,7 +38,7 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io
 
 func NewRouter(config *configs.Config) chi.Router {
 	var storage repository.Repository
-	if config.FileStoragePath != configs.FileStorageDefault {
+	if config.FileStoragePath != "" {
 		storage = repository.NewFileRepository(config.FileStoragePath)
 	} else {
 		storage = repository.NewInMemoryRepository()
@@ -169,7 +169,7 @@ func TestBothHandlersMemoryStorage(t *testing.T) {
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: configs.FileStorageDefault,
+		FileStoragePath: "",
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
@@ -192,7 +192,7 @@ func TestBothHandlersWithJSON(t *testing.T) {
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: configs.FileStorageDefault,
+		FileStoragePath: "",
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
@@ -245,7 +245,7 @@ func TestHandlerGetErrors(t *testing.T) {
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: configs.FileStorageDefault,
+		FileStoragePath: "",
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
@@ -277,7 +277,7 @@ func TestHandlerPost(t *testing.T) {
 			name:    "Test #1",
 			longURL: "https://practicum.yandex.ru/learn/go-developer/courses/",
 			want: want{
-				contentType:  configs.ContentValuePlainText,
+				contentType:  ContentValuePlainText,
 				statusCode:   http.StatusCreated,
 				responseBody: "http://localhost:8080/1",
 			},
@@ -286,7 +286,7 @@ func TestHandlerPost(t *testing.T) {
 			name:    "Test #2",
 			longURL: "",
 			want: want{
-				contentType:  configs.ContentValuePlainText,
+				contentType:  ContentValuePlainText,
 				statusCode:   http.StatusBadRequest,
 				responseBody: "URL must not be empty\n",
 			},
@@ -295,7 +295,7 @@ func TestHandlerPost(t *testing.T) {
 			name:    "Test #3",
 			longURL: "htt p://incorrect_url_here",
 			want: want{
-				contentType:  configs.ContentValuePlainText,
+				contentType:  ContentValuePlainText,
 				statusCode:   http.StatusBadRequest,
 				responseBody: "parse \"htt p://incorrect_url_here\": first path segment in URL cannot contain colon\n",
 			},
@@ -304,7 +304,7 @@ func TestHandlerPost(t *testing.T) {
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: configs.FileStorageDefault,
+		FileStoragePath: "",
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
@@ -316,7 +316,7 @@ func TestHandlerPost(t *testing.T) {
 			defer resp.Body.Close()
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 			assert.Equal(t, tt.want.responseBody, body)
-			assert.Equal(t, tt.want.contentType, resp.Header.Get(configs.ContentType))
+			assert.Equal(t, tt.want.contentType, resp.Header.Get(ContentType))
 		})
 	}
 }
@@ -337,7 +337,7 @@ func TestHandlerJsonPost(t *testing.T) {
 			name:     "test valid JSON request",
 			jsonBody: `{"url": "<some_url>"}`,
 			want: want{
-				contentType:  configs.ContentValueJSON,
+				contentType:  ContentValueJSON,
 				statusCode:   http.StatusCreated,
 				responseBody: `{"result": "http://localhost:8080/1"}`,
 				checkJSON:    true,
@@ -347,7 +347,7 @@ func TestHandlerJsonPost(t *testing.T) {
 			name:     "test invalid format for JSON request",
 			jsonBody: `{"invalid": "<some_url>"}`,
 			want: want{
-				contentType:  configs.ContentValuePlainText,
+				contentType:  ContentValuePlainText,
 				statusCode:   http.StatusBadRequest,
 				responseBody: "Invalid JSON format in request body. Expected: {\"url\": \"<some_url>\"}\n",
 				checkJSON:    false,
@@ -357,7 +357,7 @@ func TestHandlerJsonPost(t *testing.T) {
 			name:     "test invalid input for decoder",
 			jsonBody: `{"url": "invalid\github.com/test_repo"}`,
 			want: want{
-				contentType:  configs.ContentValuePlainText,
+				contentType:  ContentValuePlainText,
 				statusCode:   http.StatusBadRequest,
 				responseBody: "invalid character 'g' in string escape code\n",
 				checkJSON:    false,
@@ -367,7 +367,7 @@ func TestHandlerJsonPost(t *testing.T) {
 			name:     "test empty input URL",
 			jsonBody: `{"url": ""}`,
 			want: want{
-				contentType:  configs.ContentValuePlainText,
+				contentType:  ContentValuePlainText,
 				statusCode:   http.StatusBadRequest,
 				responseBody: "Invalid JSON format in request body. Expected: {\"url\": \"<some_url>\"}\n",
 				checkJSON:    false,
@@ -377,7 +377,7 @@ func TestHandlerJsonPost(t *testing.T) {
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: configs.FileStorageDefault,
+		FileStoragePath: "",
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
@@ -395,7 +395,7 @@ func TestHandlerJsonPost(t *testing.T) {
 				assert.Equal(t, tt.want.responseBody, body)
 			}
 
-			assert.Equal(t, tt.want.contentType, resp.Header.Get(configs.ContentType))
+			assert.Equal(t, tt.want.contentType, resp.Header.Get(ContentType))
 		})
 	}
 }

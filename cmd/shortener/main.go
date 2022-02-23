@@ -18,7 +18,7 @@ func main() {
 	}
 
 	var storage repository.Repository
-	if config.FileStoragePath != configs.FileStorageDefault {
+	if config.FileStoragePath != "" {
 		storage = repository.NewFileRepository(config.FileStoragePath)
 	} else {
 		storage = repository.NewInMemoryRepository()

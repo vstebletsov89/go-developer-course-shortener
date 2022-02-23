@@ -5,7 +5,7 @@ import (
 	"log"
 )
 
-//implements Repository interface
+// InMemoryRepository implements Repository interface
 type InMemoryRepository struct {
 	inMemoryMap map[int]string
 }

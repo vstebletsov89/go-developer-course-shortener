@@ -8,7 +8,7 @@ import (
 	"os"
 )
 
-//implements Repository interface
+// FileRepository implements Repository interface
 type FileRepository struct {
 	fileStoragePath string
 }
@@ -18,16 +18,8 @@ type fileRecord struct {
 	OriginalURL string `json:"original_url"`
 }
 
-func openFile(fileName string, flag int) (*os.File, error) {
-	file, err := os.OpenFile(fileName, flag, 0777)
-	if err != nil {
-		return nil, err
-	}
-	return file, nil
-}
-
 func (r *FileRepository) getNextID() (int, error) {
-	file, err := openFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE)
+	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
 		return 0, err
 	}
@@ -54,7 +46,7 @@ func (r *FileRepository) SaveURL(URL string) (int, error) {
 		return 0, err
 	}
 
-	file, err := openFile(r.fileStoragePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND)
+	file, err := os.OpenFile(r.fileStoragePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
 	if err != nil {
 		return 0, err
 	}
@@ -69,7 +61,7 @@ func (r *FileRepository) SaveURL(URL string) (int, error) {
 }
 
 func (r *FileRepository) GetURL(id int) (string, error) {
-	file, err := openFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE)
+	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
 		return "", err
 	}
