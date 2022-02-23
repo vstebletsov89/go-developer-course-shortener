@@ -47,7 +47,12 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io
 
 func NewRouter() chi.Router {
 	config := configs.ReadConfig()
-	storage := repository.NewRepository(config.FileStoragePath)
+	var storage repository.Repository
+	if config.FileStoragePath != configs.FileStorageDefault {
+		storage = repository.NewFileRepository(config.FileStoragePath)
+	} else {
+		storage = repository.NewInMemoryRepository()
+	}
 	handler := NewHTTPHandler(config, storage)
 
 	log.Printf("Server started on %v", config.ServerAddress)

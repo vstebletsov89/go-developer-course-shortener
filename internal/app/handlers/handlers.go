@@ -14,7 +14,7 @@ import (
 
 type Handler struct {
 	config  *configs.Config
-	storage *repository.Repository
+	storage repository.Repository
 }
 
 type RequestJSON struct {
@@ -25,7 +25,7 @@ type ResponseJSON struct {
 	Result string `json:"result"`
 }
 
-func NewHTTPHandler(cfg *configs.Config, s *repository.Repository) *Handler {
+func NewHTTPHandler(cfg *configs.Config, s repository.Repository) *Handler {
 	return &Handler{config: cfg, storage: s}
 }
 
@@ -42,7 +42,7 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Request JSON: %+v", request)
 
-	shortURL, err := h.storage.SaveShortURL(request.URL, h.config.BaseURL)
+	shortURL, err := repository.SaveShortURL(h.storage, request.URL, h.config.BaseURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -54,7 +54,11 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	buf := bytes.NewBuffer([]byte{})
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)
-	encoder.Encode(response)
+	err = encoder.Encode(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	log.Printf("Encoded JSON: %s", buf.String())
 
 	w.Header().Set(configs.ContentType, configs.ContentValueJSON)
@@ -74,7 +78,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL, err := h.storage.SaveShortURL(string(body), h.config.BaseURL)
+	shortURL, err := repository.SaveShortURL(h.storage, string(body), h.config.BaseURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

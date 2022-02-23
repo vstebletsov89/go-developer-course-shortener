@@ -12,9 +12,14 @@ import (
 
 func main() {
 	log.SetOutput(os.Stdout)
-
 	config := configs.ReadConfig()
-	storage := repository.NewRepository(config.FileStoragePath)
+
+	var storage repository.Repository
+	if config.FileStoragePath != configs.FileStorageDefault {
+		storage = repository.NewFileRepository(config.FileStoragePath)
+	} else {
+		storage = repository.NewInMemoryRepository()
+	}
 	handler := handlers.NewHTTPHandler(config, storage)
 
 	log.Printf("Server started on %v", config.ServerAddress)
