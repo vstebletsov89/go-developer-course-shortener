@@ -12,7 +12,10 @@ import (
 
 func main() {
 	log.SetOutput(os.Stdout)
-	config := configs.ReadConfig()
+	config, err := configs.ReadConfig()
+	if err != nil {
+		log.Fatal("Failed to read server configuration")
+	}
 
 	var storage repository.Repository
 	if config.FileStoragePath != configs.FileStorageDefault {

@@ -12,31 +12,21 @@ type Config struct {
 	FileStoragePath string `env:"FILE_STORAGE_PATH" envDefault:"FILE_STORAGE_PATH_NOT_DEFINED"`
 }
 
-func flagExists(name string) bool {
-	return flag.Lookup(name) != nil
-}
-
 func (c *Config) readCommandLineArgs() {
-	if !flagExists("a") {
-		flag.StringVar(&c.ServerAddress, "a", c.ServerAddress, "server and port to listen on")
-	}
-	if !flagExists("b") {
-		flag.StringVar(&c.BaseURL, "b", c.BaseURL, "base url of the resulting shorthand")
-	}
-	if !flagExists("f") {
-		flag.StringVar(&c.FileStoragePath, "f", c.FileStoragePath, "file storage path")
-	}
+	flag.StringVar(&c.ServerAddress, "a", c.ServerAddress, "server and port to listen on")
+	flag.StringVar(&c.BaseURL, "b", c.BaseURL, "base url of the resulting shorthand")
+	flag.StringVar(&c.FileStoragePath, "f", c.FileStoragePath, "file storage path")
 	flag.Parse()
 }
 
-func ReadConfig() *Config {
+func ReadConfig() (*Config, error) {
 	var cfg Config
 	err := env.Parse(&cfg)
 
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	cfg.readCommandLineArgs()
 	log.Printf("%+v\n\n", cfg)
-	return &cfg
+	return &cfg, nil
 }

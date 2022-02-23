@@ -18,10 +18,7 @@ import (
 
 func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io.Reader) (*http.Response, string) {
 	req, err := http.NewRequest(method, ts.URL+path, body)
-	if err != nil {
-		t.Fatal(err)
-		return nil, ""
-	}
+	assert.NoError(t, err)
 
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -30,23 +27,16 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io
 	}
 
 	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatal(err)
-		return nil, ""
-	}
+	assert.NoError(t, err)
 
 	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-		return nil, ""
-	}
+	assert.NoError(t, err)
 	defer resp.Body.Close()
 
 	return resp, string(respBody)
 }
 
-func NewRouter() chi.Router {
-	config := configs.ReadConfig()
+func NewRouter(config *configs.Config) chi.Router {
 	var storage repository.Repository
 	if config.FileStoragePath != configs.FileStorageDefault {
 		storage = repository.NewFileRepository(config.FileStoragePath)
@@ -68,21 +58,21 @@ func NewRouter() chi.Router {
 
 func TestBothHandlersFileStorageInvalidRecord(t *testing.T) {
 	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	file, err := os.CreateTemp(homeDir, "test")
-	if err != nil {
-		log.Fatal(err)
-	}
+	assert.NoError(t, err)
+
 	defer os.RemoveAll(file.Name())
 
 	log.Printf("Temporary file name: %s", file.Name())
-	os.Setenv("FILE_STORAGE_PATH", file.Name())
-	defer os.Unsetenv("FILE_STORAGE_PATH")
 
-	r := NewRouter()
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: file.Name(),
+	}
+	r := NewRouter(config)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -101,21 +91,20 @@ func TestBothHandlersFileStorageInvalidRecord(t *testing.T) {
 
 func TestBothHandlersFileStorageOneRecord(t *testing.T) {
 	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	file, err := os.CreateTemp(homeDir, "test")
-	if err != nil {
-		log.Fatal(err)
-	}
+	assert.NoError(t, err)
 	defer os.RemoveAll(file.Name())
 
 	log.Printf("Temporary file name: %s", file.Name())
-	os.Setenv("FILE_STORAGE_PATH", file.Name())
-	defer os.Unsetenv("FILE_STORAGE_PATH")
 
-	r := NewRouter()
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: file.Name(),
+	}
+	r := NewRouter(config)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -134,21 +123,20 @@ func TestBothHandlersFileStorageOneRecord(t *testing.T) {
 
 func TestBothHandlersFileStorageTwoRecords(t *testing.T) {
 	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	file, err := os.CreateTemp(homeDir, "test")
-	if err != nil {
-		log.Fatal(err)
-	}
+	assert.NoError(t, err)
 	defer os.RemoveAll(file.Name())
 
 	log.Printf("Temporary file name: %s", file.Name())
-	os.Setenv("FILE_STORAGE_PATH", file.Name())
-	defer os.Unsetenv("FILE_STORAGE_PATH")
 
-	r := NewRouter()
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: file.Name(),
+	}
+	r := NewRouter(config)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -177,8 +165,13 @@ func TestBothHandlersFileStorageTwoRecords(t *testing.T) {
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 }
 
-func TestBothHandlers(t *testing.T) {
-	r := NewRouter()
+func TestBothHandlersMemoryStorage(t *testing.T) {
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: configs.FileStorageDefault,
+	}
+	r := NewRouter(config)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -196,7 +189,12 @@ func TestBothHandlers(t *testing.T) {
 }
 
 func TestBothHandlersWithJSON(t *testing.T) {
-	r := NewRouter()
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: configs.FileStorageDefault,
+	}
+	r := NewRouter(config)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -244,7 +242,12 @@ func TestHandlerGetErrors(t *testing.T) {
 		},
 	}
 
-	r := NewRouter()
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: configs.FileStorageDefault,
+	}
+	r := NewRouter(config)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -298,7 +301,12 @@ func TestHandlerPost(t *testing.T) {
 			},
 		},
 	}
-	r := NewRouter()
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: configs.FileStorageDefault,
+	}
+	r := NewRouter(config)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
@@ -366,7 +374,12 @@ func TestHandlerJsonPost(t *testing.T) {
 			},
 		},
 	}
-	r := NewRouter()
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: configs.FileStorageDefault,
+	}
+	r := NewRouter(config)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
