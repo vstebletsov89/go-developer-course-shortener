@@ -27,6 +27,7 @@ func main() {
 
 	log.Printf("Server started on %v", config.ServerAddress)
 	r := chi.NewRouter()
+	r.Use(handlers.GzipHandle)
 
 	// маршрутизация запросов обработчику
 	r.Post("/", handler.HandlerPOST)
