@@ -14,6 +14,7 @@ type FileRepository struct {
 }
 
 type fileRecord struct {
+	UserID      string `json:"user_id"`
 	ID          int    `json:"id"`
 	OriginalURL string `json:"original_url"`
 }
@@ -40,7 +41,7 @@ func (r *FileRepository) getNextID() (int, error) {
 	return counter + 1, nil
 }
 
-func (r *FileRepository) SaveURL(URL string) (int, error) {
+func (r *FileRepository) SaveURL(userID string, URL string) (int, error) {
 	id, err := r.getNextID()
 	if err != nil {
 		return 0, err
@@ -53,14 +54,14 @@ func (r *FileRepository) SaveURL(URL string) (int, error) {
 	defer file.Close()
 
 	encoder := json.NewEncoder(file)
-	err = encoder.Encode(&fileRecord{ID: id, OriginalURL: URL})
+	err = encoder.Encode(&fileRecord{UserID: userID, ID: id, OriginalURL: URL})
 	if err != nil {
 		return 0, err
 	}
 	return id, nil
 }
 
-func (r *FileRepository) GetURL(id int) (string, error) {
+func (r *FileRepository) GetURL(userID string, id int) (string, error) {
 	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
 		return "", err
@@ -77,7 +78,7 @@ func (r *FileRepository) GetURL(id int) (string, error) {
 		}
 
 		log.Printf("Record from file (get): %+v", record)
-		if record.ID == id {
+		if record.UserID == userID && record.ID == id {
 			return record.OriginalURL, nil
 		}
 	}

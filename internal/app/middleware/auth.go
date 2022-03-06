@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"github.com/google/uuid"
-	"go-developer-course-shortener/internal/app/handlers"
 	"log"
 	"net/http"
 )
@@ -82,7 +81,7 @@ func AuthHandle(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userID := uuid.NewString()
 		validAccessToken := false
-		if c, err := r.Cookie(handlers.AccessToken); err == nil {
+		if c, err := r.Cookie(AccessToken); err == nil {
 			if decrypted, err := decrypt(c.Value); err == nil {
 				userID = decrypted
 				log.Printf("Decrypted userID: '%s'", userID)
@@ -98,13 +97,13 @@ func AuthHandle(next http.Handler) http.Handler {
 			}
 			log.Printf("Set cookie '%s' for current userID: '%s'", encrypted, userID)
 			c := &http.Cookie{
-				Name:  handlers.AccessToken,
+				Name:  AccessToken,
 				Value: encrypted,
 				Path:  `/`,
 			}
 			http.SetCookie(w, c)
 		}
-		ctx := context.WithValue(r.Context(), handlers.AccessToken, userID)
+		ctx := context.WithValue(r.Context(), AccessToken, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

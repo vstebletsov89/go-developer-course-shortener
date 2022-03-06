@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
+	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/utils"
 	"go-developer-course-shortener/internal/configs"
@@ -49,7 +50,12 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	id, err := h.storage.SaveURL(longURL)
+
+	ctx := r.Context().Value(middleware.AccessToken)
+	userID := ctx.(string)
+	log.Printf("userID: %s", userID)
+
+	id, err := h.storage.SaveURL(userID, longURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -93,7 +99,12 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	id, err := h.storage.SaveURL(longURL)
+
+	ctx := r.Context().Value(middleware.AccessToken)
+	userID := ctx.(string)
+	log.Printf("userID: %s", userID)
+
+	id, err := h.storage.SaveURL(userID, longURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -123,7 +134,10 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("ID: %d", id)
-	originalURL, err := h.storage.GetURL(id)
+	ctx := r.Context().Value(middleware.AccessToken)
+	userID := ctx.(string)
+	log.Printf("userID: %s", userID)
+	originalURL, err := h.storage.GetURL(userID, id)
 	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)
 		return

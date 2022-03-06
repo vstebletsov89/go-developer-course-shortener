@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/configs"
 	"io"
@@ -36,6 +38,13 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io
 	return resp, string(respBody)
 }
 
+func AuthHandleMock(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), middleware.AccessToken, "4b003ed0-4d8f-46eb-8322-e90174110517")
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func NewRouter(config *configs.Config) chi.Router {
 	var storage repository.Repository
 	if config.FileStoragePath != "" {
@@ -47,6 +56,7 @@ func NewRouter(config *configs.Config) chi.Router {
 
 	log.Printf("Server started on %v", config.ServerAddress)
 	r := chi.NewRouter()
+	r.Use(AuthHandleMock)
 
 	// маршрутизация запросов обработчику
 	r.Post("/", handler.HandlerPOST)
