@@ -127,7 +127,7 @@ func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) 
 	log.Printf("Get all links for userID: %s", userID)
 	links, err := h.storage.GetUserStorage(userID, h.config.BaseURL)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if len(links) == 0 {
