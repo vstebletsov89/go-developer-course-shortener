@@ -80,7 +80,7 @@ func (r *FileRepository) GetURL(userID string, id int) (string, error) {
 		}
 
 		log.Printf("Record from file (get): %+v", record)
-		if record.UserID == userID && record.ID == id {
+		if record.ID == id {
 			return record.OriginalURL, nil
 		}
 	}

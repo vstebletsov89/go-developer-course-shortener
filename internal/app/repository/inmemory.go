@@ -28,20 +28,6 @@ func (r *InMemoryRepository) SaveURL(userID string, URL string) (int, error) {
 }
 
 func (r *InMemoryRepository) GetURL(userID string, id int) (string, error) {
-	ids, ok := r.inMemoryUserStorage[userID]
-	if !ok {
-		return "", errors.New("UserID not found")
-	}
-	var idExists = false
-	for _, v := range ids {
-		if v == id {
-			idExists = true
-		}
-	}
-	if !idExists {
-		return "", errors.New("ID not found")
-	}
-
 	URL, ok := r.inMemoryMap[id]
 	if !ok {
 		return "", errors.New("ID not found")
