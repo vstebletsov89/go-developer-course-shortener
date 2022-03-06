@@ -2,6 +2,8 @@ package repository
 
 import (
 	"errors"
+	"go-developer-course-shortener/internal/app/types"
+	"go-developer-course-shortener/internal/app/utils"
 	"log"
 )
 
@@ -26,10 +28,13 @@ func (r *InMemoryRepository) SaveURL(userID string, URL string) (int, error) {
 }
 
 func (r *InMemoryRepository) GetURL(userID string, id int) (string, error) {
-	ids := r.inMemoryUserStorage[userID]
+	ids, ok := r.inMemoryUserStorage[userID]
+	if !ok {
+		return "", errors.New("UserID not found")
+	}
 	var idExists = false
-	for i := range ids {
-		if ids[i] == id {
+	for _, v := range ids {
+		if v == id {
 			idExists = true
 		}
 	}
@@ -42,6 +47,22 @@ func (r *InMemoryRepository) GetURL(userID string, id int) (string, error) {
 		return "", errors.New("ID not found")
 	}
 	return URL, nil
+}
+
+func (r *InMemoryRepository) GetUserStorage(userID string, baseURL string) ([]types.Link, error) {
+	var links []types.Link
+	ids, ok := r.inMemoryUserStorage[userID]
+	if !ok {
+		return links, errors.New("UserID not found")
+	}
+	for _, v := range ids {
+		URL, ok := r.inMemoryMap[v]
+		if !ok {
+			return links, errors.New("ID not found")
+		}
+		links = append(links, types.Link{ShortURL: utils.MakeShortURL(baseURL, v), OriginalURL: URL})
+	}
+	return links, nil
 }
 
 func NewInMemoryRepository() *InMemoryRepository {

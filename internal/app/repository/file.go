@@ -3,6 +3,8 @@ package repository
 import (
 	"encoding/json"
 	"errors"
+	"go-developer-course-shortener/internal/app/types"
+	"go-developer-course-shortener/internal/app/utils"
 	"io"
 	"log"
 	"os"
@@ -83,6 +85,31 @@ func (r *FileRepository) GetURL(userID string, id int) (string, error) {
 		}
 	}
 	return "", errors.New("ID not found")
+}
+
+func (r *FileRepository) GetUserStorage(userID string, baseURL string) ([]types.Link, error) {
+	var links []types.Link
+	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
+	if err != nil {
+		return links, err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	for {
+		record := &fileRecord{}
+		if err := decoder.Decode(&record); err == io.EOF {
+			break
+		} else if err != nil {
+			return links, err
+		}
+
+		log.Printf("Record from file (getUserStorage): %+v", record)
+		if record.UserID == userID {
+			links = append(links, types.Link{ShortURL: utils.MakeShortURL(baseURL, record.ID), OriginalURL: record.OriginalURL})
+		}
+	}
+	return links, nil
 }
 
 func NewFileRepository(fileStoragePath string) *FileRepository {

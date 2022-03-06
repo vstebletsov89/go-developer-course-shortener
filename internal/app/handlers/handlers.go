@@ -122,7 +122,30 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) {
-	//TODO: get all
+	ctx := r.Context().Value(middleware.AccessToken)
+	userID := ctx.(string)
+	log.Printf("Get all links for userID: %s", userID)
+	links, err := h.storage.GetUserStorage(userID, h.config.BaseURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(links) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	body, err := json.Marshal(links)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set(ContentType, ContentValueJSON)
+	w.WriteHeader(http.StatusOK)
+	_, err = w.Write(body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 }
 
 func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
