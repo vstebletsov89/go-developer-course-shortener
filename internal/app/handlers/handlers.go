@@ -51,7 +51,7 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context().Value(middleware.AccessToken)
+	ctx := r.Context().Value(middleware.UserCtx)
 	userID := ctx.(string)
 	log.Printf("userID: %s", userID)
 
@@ -100,7 +100,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context().Value(middleware.AccessToken)
+	ctx := r.Context().Value(middleware.UserCtx)
 	userID := ctx.(string)
 	log.Printf("userID: %s", userID)
 
@@ -122,7 +122,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context().Value(middleware.AccessToken)
+	ctx := r.Context().Value(middleware.UserCtx)
 	userID := ctx.(string)
 	log.Printf("Get all links for userID: %s", userID)
 	links, err := h.storage.GetUserStorage(userID, h.config.BaseURL)
@@ -157,7 +157,7 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("ID: %d", id)
-	ctx := r.Context().Value(middleware.AccessToken)
+	ctx := r.Context().Value(middleware.UserCtx)
 	userID := ctx.(string)
 	log.Printf("userID: %s", userID)
 	originalURL, err := h.storage.GetURL(userID, id)

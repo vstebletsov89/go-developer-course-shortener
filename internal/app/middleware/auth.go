@@ -89,7 +89,7 @@ func AuthHandle(next http.Handler) http.Handler {
 			}
 		}
 		if !validAccessToken {
-			//cookie not found or not valid
+			// cookie not found or not valid
 			encrypted, err := encrypt(userID)
 			if err != nil {
 				http.Error(w, "Can not encrypt token", http.StatusInternalServerError)
@@ -103,7 +103,7 @@ func AuthHandle(next http.Handler) http.Handler {
 			}
 			http.SetCookie(w, c)
 		}
-		ctx := context.WithValue(r.Context(), AccessToken, userID)
+		ctx := context.WithValue(r.Context(), UserCtx, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
