@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/go-chi/chi/v5"
 	"go-developer-course-shortener/internal/app/handlers"
+	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/configs"
 	"log"
@@ -27,12 +28,13 @@ func main() {
 
 	log.Printf("Server started on %v", config.ServerAddress)
 	r := chi.NewRouter()
-	r.Use(handlers.GzipHandle)
+	r.Use(middleware.GzipHandle, middleware.AuthHandle)
 
 	// маршрутизация запросов обработчику
 	r.Post("/", handler.HandlerPOST)
 	r.Post("/api/shorten", handler.HandlerJSONPOST)
 	r.Get("/{ID}", handler.HandlerGET)
+	r.Get("/api/user/urls", handler.HandlerUserStorageGET)
 
 	log.Fatal(http.ListenAndServe(config.ServerAddress, r))
 }

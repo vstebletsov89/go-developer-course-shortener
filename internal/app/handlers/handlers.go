@@ -110,6 +110,10 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) {
+	//TODO: get all
+}
+
 func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	strID := chi.URLParam(r, "ID")
 	log.Printf("strID: `%s`", strID)
