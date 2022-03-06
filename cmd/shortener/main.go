@@ -12,6 +12,7 @@ import (
 )
 
 func main() {
+	//,,,
 	log.SetOutput(os.Stdout)
 	config, err := configs.ReadConfig()
 	if err != nil {
