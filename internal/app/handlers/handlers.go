@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
 	"go-developer-course-shortener/internal/app/middleware"
@@ -12,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type Handler struct {
@@ -169,4 +172,22 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(ContentType, ContentValuePlainText)
 	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
+}
+
+func (h *Handler) HandlerPing(w http.ResponseWriter, r *http.Request) {
+	db, err := sql.Open("postgres", h.config.DatabaseDsn)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	ctx := r.Context()
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
+	if err = db.PingContext(ctx); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
