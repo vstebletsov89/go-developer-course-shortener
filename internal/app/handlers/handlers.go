@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v4"
+	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/utils"
 	"go-developer-course-shortener/internal/configs"
@@ -49,7 +52,12 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	id, err := h.storage.SaveURL(longURL)
+
+	ctx := r.Context().Value(middleware.UserCtx)
+	userID := ctx.(string)
+	log.Printf("userID: %s", userID)
+
+	id, err := h.storage.SaveURL(userID, longURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -93,7 +101,12 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	id, err := h.storage.SaveURL(longURL)
+
+	ctx := r.Context().Value(middleware.UserCtx)
+	userID := ctx.(string)
+	log.Printf("userID: %s", userID)
+
+	id, err := h.storage.SaveURL(userID, longURL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -110,6 +123,33 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context().Value(middleware.UserCtx)
+	userID := ctx.(string)
+	log.Printf("Get all links for userID: %s", userID)
+	links, err := h.storage.GetUserStorage(userID, h.config.BaseURL)
+	if err != nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if len(links) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	body, err := json.Marshal(links)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set(ContentType, ContentValueJSON)
+	w.WriteHeader(http.StatusOK)
+	_, err = w.Write(body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+}
+
 func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	strID := chi.URLParam(r, "ID")
 	log.Printf("strID: `%s`", strID)
@@ -119,7 +159,10 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("ID: %d", id)
-	originalURL, err := h.storage.GetURL(id)
+	ctx := r.Context().Value(middleware.UserCtx)
+	userID := ctx.(string)
+	log.Printf("userID: %s", userID)
+	originalURL, err := h.storage.GetURL(userID, id)
 	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)
 		return
@@ -128,4 +171,14 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(ContentType, ContentValuePlainText)
 	w.Header().Set("Location", originalURL)
 	w.WriteHeader(http.StatusTemporaryRedirect)
+}
+
+func (h *Handler) HandlerPing(w http.ResponseWriter, r *http.Request) {
+	conn, err := pgx.Connect(context.Background(), h.config.DatabaseDsn)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer conn.Close(context.Background())
+	w.WriteHeader(http.StatusOK)
 }
