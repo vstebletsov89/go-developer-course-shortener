@@ -3,9 +3,9 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v4"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/utils"
@@ -14,7 +14,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 )
 
 type Handler struct {
@@ -175,19 +174,11 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandlerPing(w http.ResponseWriter, r *http.Request) {
-	db, err := sql.Open("postgres", h.config.DatabaseDsn)
+	conn, err := pgx.Connect(context.Background(), h.config.DatabaseDsn)
 	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
-	ctx := r.Context()
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
-	defer cancel()
-
-	if err = db.PingContext(ctx); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer conn.Close(context.Background())
 	w.WriteHeader(http.StatusOK)
 }
