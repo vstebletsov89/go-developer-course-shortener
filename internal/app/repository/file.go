@@ -63,7 +63,7 @@ func (r *FileRepository) SaveURL(userID string, URL string) (int, error) {
 	return id, nil
 }
 
-func (r *FileRepository) GetURL(userID string, id int) (string, error) {
+func (r *FileRepository) GetURL(id int) (string, error) {
 	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
 		return "", err

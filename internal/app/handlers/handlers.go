@@ -162,7 +162,7 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context().Value(middleware.UserCtx)
 	userID := ctx.(string)
 	log.Printf("userID: %s", userID)
-	originalURL, err := h.storage.GetURL(userID, id)
+	originalURL, err := h.storage.GetURL(id)
 	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)
 		return
@@ -174,7 +174,7 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandlerPing(w http.ResponseWriter, r *http.Request) {
-	conn, err := pgx.Connect(context.Background(), h.config.DatabaseDsn)
+	conn, err := pgx.Connect(r.Context(), h.config.DatabaseDsn)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

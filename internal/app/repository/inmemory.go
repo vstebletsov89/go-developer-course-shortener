@@ -27,7 +27,7 @@ func (r *InMemoryRepository) SaveURL(userID string, URL string) (int, error) {
 	return id, nil
 }
 
-func (r *InMemoryRepository) GetURL(userID string, id int) (string, error) {
+func (r *InMemoryRepository) GetURL(id int) (string, error) {
 	URL, ok := r.inMemoryMap[id]
 	if !ok {
 		return "", errors.New("ID not found")
