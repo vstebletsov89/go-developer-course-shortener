@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v4"
 	_ "github.com/jackc/pgx/v4"
 	"go-developer-course-shortener/internal/app/handlers"
 	"go-developer-course-shortener/internal/app/middleware"
@@ -20,7 +22,18 @@ func main() {
 	}
 
 	var storage repository.Repository
-	if config.FileStoragePath != "" {
+	if config.DatabaseDsn != "" {
+		conn, err := pgx.Connect(context.Background(), config.DatabaseDsn)
+		if err != nil {
+			log.Fatal("Failed to connect to database")
+		}
+		defer conn.Close(context.Background())
+
+		storage, err = repository.NewDBRepository(conn)
+		if err != nil {
+			log.Fatal("Failed to create DB repository")
+		}
+	} else if config.FileStoragePath != "" {
 		storage = repository.NewFileRepository(config.FileStoragePath)
 	} else {
 		storage = repository.NewInMemoryRepository()
