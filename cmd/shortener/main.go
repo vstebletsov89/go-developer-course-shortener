@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v4"
-	_ "github.com/jackc/pgx/v4"
 	"go-developer-course-shortener/internal/app/handlers"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
@@ -44,7 +43,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.GzipHandle, middleware.AuthHandle)
 
-	// маршрутизация запросов обработчику
+	// routing
 	r.Post("/", handler.HandlerPOST)
 	r.Post("/api/shorten", handler.HandlerJSONPOST)
 	r.Get("/{ID}", handler.HandlerGET)
