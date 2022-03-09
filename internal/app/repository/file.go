@@ -3,6 +3,8 @@ package repository
 import (
 	"encoding/json"
 	"errors"
+	"go-developer-course-shortener/internal/app/types"
+	"go-developer-course-shortener/internal/app/utils"
 	"io"
 	"log"
 	"os"
@@ -14,6 +16,7 @@ type FileRepository struct {
 }
 
 type fileRecord struct {
+	UserID      string `json:"user_id"`
 	ID          int    `json:"id"`
 	OriginalURL string `json:"original_url"`
 }
@@ -40,7 +43,7 @@ func (r *FileRepository) getNextID() (int, error) {
 	return counter + 1, nil
 }
 
-func (r *FileRepository) SaveURL(URL string) (int, error) {
+func (r *FileRepository) SaveURL(userID string, URL string) (int, error) {
 	id, err := r.getNextID()
 	if err != nil {
 		return 0, err
@@ -53,11 +56,16 @@ func (r *FileRepository) SaveURL(URL string) (int, error) {
 	defer file.Close()
 
 	encoder := json.NewEncoder(file)
-	err = encoder.Encode(&fileRecord{ID: id, OriginalURL: URL})
+	err = encoder.Encode(&fileRecord{UserID: userID, ID: id, OriginalURL: URL})
 	if err != nil {
 		return 0, err
 	}
 	return id, nil
+}
+
+func (r *FileRepository) SaveBatchURLS(userID string, request types.RequestBatch, baseURL string) (types.ResponseBatch, error) {
+	var response types.ResponseBatch
+	return response, nil
 }
 
 func (r *FileRepository) GetURL(id int) (string, error) {
@@ -82,6 +90,31 @@ func (r *FileRepository) GetURL(id int) (string, error) {
 		}
 	}
 	return "", errors.New("ID not found")
+}
+
+func (r *FileRepository) GetUserStorage(userID string, baseURL string) ([]types.Link, error) {
+	var links []types.Link
+	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
+	if err != nil {
+		return links, err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	for {
+		record := &fileRecord{}
+		if err := decoder.Decode(&record); err == io.EOF {
+			break
+		} else if err != nil {
+			return links, err
+		}
+
+		log.Printf("Record from file (getUserStorage): %+v", record)
+		if record.UserID == userID {
+			links = append(links, types.Link{ShortURL: utils.MakeShortURL(baseURL, record.ID), OriginalURL: record.OriginalURL})
+		}
+	}
+	return links, nil
 }
 
 func NewFileRepository(fileStoragePath string) *FileRepository {
