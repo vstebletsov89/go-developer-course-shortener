@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
+	"go-developer-course-shortener/internal/app/types"
 	"go-developer-course-shortener/internal/app/utils"
 	"go-developer-course-shortener/internal/configs"
 	"io"
@@ -21,20 +22,56 @@ type Handler struct {
 	storage repository.Repository
 }
 
-type RequestJSON struct {
-	URL string `json:"url"`
-}
-
-type ResponseJSON struct {
-	Result string `json:"result"`
-}
-
 func NewHTTPHandler(cfg *configs.Config, s repository.Repository) *Handler {
 	return &Handler{config: cfg, storage: s}
 }
 
+func extractUserID(r *http.Request) string {
+	ctx := r.Context().Value(middleware.UserCtx)
+	userID := ctx.(string)
+	log.Printf("userID: %s", userID)
+	return userID
+}
+
+func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
+	var request types.RequestBatch
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	log.Printf("Request batch JSON: %+v", request)
+
+	userID := extractUserID(r)
+	var response types.ResponseBatch
+	response, err := h.storage.SaveBatchURLS(userID, request, h.config.BaseURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	log.Printf("Response batch JSON: %+v", response)
+
+	buf := bytes.NewBuffer([]byte{})
+	encoder := json.NewEncoder(buf)
+	encoder.SetEscapeHTML(false)
+	err = encoder.Encode(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	log.Printf("Encoded JSON: %s", buf.String())
+
+	w.Header().Set(ContentType, ContentValueJSON)
+	w.WriteHeader(http.StatusCreated)
+
+	_, err = w.Write(buf.Bytes())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+}
+
 func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
-	var request RequestJSON
+	var request types.RequestJSON
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -53,9 +90,7 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context().Value(middleware.UserCtx)
-	userID := ctx.(string)
-	log.Printf("userID: %s", userID)
+	userID := extractUserID(r)
 
 	id, err := h.storage.SaveURL(userID, longURL)
 	if err != nil {
@@ -65,7 +100,7 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
 
-	response := ResponseJSON{Result: shortURL}
+	response := types.ResponseJSON{Result: shortURL}
 	log.Printf("Response JSON: %+v", response)
 
 	buf := bytes.NewBuffer([]byte{})
@@ -102,9 +137,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context().Value(middleware.UserCtx)
-	userID := ctx.(string)
-	log.Printf("userID: %s", userID)
+	userID := extractUserID(r)
 
 	id, err := h.storage.SaveURL(userID, longURL)
 	if err != nil {
@@ -124,8 +157,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context().Value(middleware.UserCtx)
-	userID := ctx.(string)
+	userID := extractUserID(r)
 	log.Printf("Get all links for userID: %s", userID)
 	links, err := h.storage.GetUserStorage(userID, h.config.BaseURL)
 	if err != nil {
@@ -159,9 +191,7 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("ID: %d", id)
-	ctx := r.Context().Value(middleware.UserCtx)
-	userID := ctx.(string)
-	log.Printf("userID: %s", userID)
+
 	originalURL, err := h.storage.GetURL(id)
 	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)

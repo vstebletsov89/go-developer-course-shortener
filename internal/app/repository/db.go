@@ -29,6 +29,41 @@ func (r *DBRepository) SaveURL(userID string, URL string) (int, error) {
 	return id + 1, nil
 }
 
+func (r *DBRepository) SaveBatchURLS(userID string, request types.RequestBatch, baseURL string) (types.ResponseBatch, error) {
+	ctx := context.Background()
+	tx, err := r.conn.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	sql := `INSERT INTO urls (user_id, original_url) VALUES ($1, $2)`
+
+	row := r.conn.QueryRow(context.Background(), "SELECT COUNT(*) FROM urls")
+	var id int
+	err = row.Scan(&id)
+	if err != nil {
+		return nil, err
+	}
+
+	var response types.ResponseBatch
+	for _, v := range request {
+		_, err := tx.Exec(ctx, sql, userID, v.OriginalURL)
+		if err != nil {
+			return nil, err
+		}
+		response = append(response, types.ResponseBatchJSON{CorrelationID: v.CorrelationID, ShortURL: utils.MakeShortURL(baseURL, id+1)})
+		id = id + 1
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
 func (r *DBRepository) GetURL(id int) (string, error) {
 	sql := `SELECT original_url FROM urls WHERE id = $1`
 	row := r.conn.QueryRow(context.Background(), sql, id)

@@ -46,28 +46,10 @@ func main() {
 	// routing
 	r.Post("/", handler.HandlerPOST)
 	r.Post("/api/shorten", handler.HandlerJSONPOST)
+	r.Post("/api/shorten/batch", handler.HandlerBatchPOST)
 	r.Get("/{ID}", handler.HandlerGET)
 	r.Get("/api/user/urls", handler.HandlerUserStorageGET)
 	r.Get("/ping", handler.HandlerPing)
-
-	//TODO:
-	//	Добавьте новый хендлер POST /api/shorten/batch, принимающий в теле запроса множество URL
-	//	для сокращения в формате:
-	//[
-	//	{
-	//	"correlation_id": "<строковый идентификатор>",
-	//	"original_url": "<URL для сокращения>"
-	//	},
-	//	...
-	//	]
-	//	В качестве ответа хендлер должен возвращать данные в формате:
-	//[
-	//{
-	//"correlation_id": "<строковый идентификатор из объекта запроса>",
-	//"short_url": "<результирующий сокращённый URL>"
-	//},
-	//...
-	//]
 
 	log.Fatal(http.ListenAndServe(config.ServerAddress, r))
 }

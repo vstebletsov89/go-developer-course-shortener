@@ -63,6 +63,11 @@ func (r *FileRepository) SaveURL(userID string, URL string) (int, error) {
 	return id, nil
 }
 
+func (r *FileRepository) SaveBatchURLS(userID string, request types.RequestBatch, baseURL string) (types.ResponseBatch, error) {
+	var response types.ResponseBatch
+	return response, nil
+}
+
 func (r *FileRepository) GetURL(id int) (string, error) {
 	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
