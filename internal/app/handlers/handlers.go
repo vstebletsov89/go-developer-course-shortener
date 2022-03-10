@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgconn"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v4"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
@@ -92,8 +95,19 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 
 	userID := extractUserID(r)
 
-	id, err := h.storage.SaveURL(userID, longURL)
+	var status = http.StatusCreated
+	var id int
+	id, err = h.storage.SaveURL(userID, longURL)
 	if err != nil {
+		var pgError *pgconn.PgError
+		if errors.As(err, &pgError) && pgError.Code == pgerrcode.UniqueViolation {
+			id, err = h.storage.GetShortURLByOriginalURL(longURL)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			status = http.StatusConflict
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -114,7 +128,7 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Encoded JSON: %s", buf.String())
 
 	w.Header().Set(ContentType, ContentValueJSON)
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(status)
 
 	_, err = w.Write(buf.Bytes())
 	if err != nil {
@@ -139,8 +153,19 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 
 	userID := extractUserID(r)
 
-	id, err := h.storage.SaveURL(userID, longURL)
+	var status = http.StatusCreated
+	var id int
+	id, err = h.storage.SaveURL(userID, longURL)
 	if err != nil {
+		var pgError *pgconn.PgError
+		if errors.As(err, &pgError) && pgError.Code == pgerrcode.UniqueViolation {
+			id, err = h.storage.GetShortURLByOriginalURL(longURL)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			status = http.StatusConflict
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -148,7 +173,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Short URL: %v", shortURL)
 
 	w.Header().Set(ContentType, ContentValuePlainText)
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(status)
 	_, err = w.Write([]byte(shortURL))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

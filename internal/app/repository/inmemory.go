@@ -27,6 +27,10 @@ func (r *InMemoryRepository) SaveURL(userID string, URL string) (int, error) {
 	return id, nil
 }
 
+func (r *InMemoryRepository) GetShortURLByOriginalURL(originalURL string) (int, error) {
+	return 0, nil
+}
+
 func (r *InMemoryRepository) SaveBatchURLS(userID string, request types.RequestBatch, baseURL string) (types.ResponseBatch, error) {
 	var response types.ResponseBatch
 	return response, nil

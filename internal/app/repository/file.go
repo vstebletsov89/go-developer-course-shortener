@@ -63,6 +63,10 @@ func (r *FileRepository) SaveURL(userID string, URL string) (int, error) {
 	return id, nil
 }
 
+func (r *FileRepository) GetShortURLByOriginalURL(originalURL string) (int, error) {
+	return 0, nil
+}
+
 func (r *FileRepository) SaveBatchURLS(userID string, request types.RequestBatch, baseURL string) (types.ResponseBatch, error) {
 	var response types.ResponseBatch
 	return response, nil

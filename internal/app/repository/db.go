@@ -75,6 +75,17 @@ func (r *DBRepository) GetURL(id int) (string, error) {
 	return originalURL, nil
 }
 
+func (r *DBRepository) GetShortURLByOriginalURL(originalURL string) (int, error) {
+	sql := `SELECT id FROM urls WHERE original_url = $1`
+	row := r.conn.QueryRow(context.Background(), sql, originalURL)
+	var id int
+	err := row.Scan(&id)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
 func (r *DBRepository) GetUserStorage(userID string, baseURL string) ([]types.Link, error) {
 	var links []types.Link
 	sql := `SELECT id, original_url FROM urls WHERE user_id = $1`
@@ -102,7 +113,8 @@ func NewDBRepository(connection *pgx.Conn) (*DBRepository, error) {
 		id           serial not null primary key,
 		user_id      text,
 		original_url text
-	);`
+	);
+    create unique index if not exists original_url_ix on urls(original_url);`
 	_, err := connection.Exec(context.Background(), sql)
 	if err != nil {
 		return nil, err
