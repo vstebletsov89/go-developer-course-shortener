@@ -107,9 +107,10 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			status = http.StatusConflict
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
 	}
 	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
@@ -165,9 +166,10 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			status = http.StatusConflict
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
 	}
 	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
