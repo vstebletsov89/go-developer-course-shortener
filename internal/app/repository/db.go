@@ -50,7 +50,7 @@ func (r *DBRepository) SaveBatchURLS(userID string, links types.BatchLinks) (typ
 		return nil, err
 	}
 
-	return nil, nil
+	return response, nil
 }
 
 func (r *DBRepository) GetURL(shortURL string) (string, error) {

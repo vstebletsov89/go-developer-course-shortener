@@ -96,7 +96,7 @@ func TestBothHandlersFileStorageInvalidRecord(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%s", "AAAAA"), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, "/AAAAA", nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -130,7 +130,7 @@ func TestBothHandlersFileStorageOneRecord(t *testing.T) {
 	assert.NoError(t, err)
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("%s", shortURL.Path), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
@@ -171,13 +171,13 @@ func TestBothHandlersFileStorageTwoRecords(t *testing.T) {
 	assert.NoError(t, err)
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("%s", shortURL2.Path), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, shortURL2.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo2", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("%s", shortURL1.Path), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, shortURL1.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
@@ -202,7 +202,7 @@ func TestBothHandlersMemoryStorage(t *testing.T) {
 	assert.NoError(t, err)
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("%s", shortURL.Path), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
@@ -230,7 +230,7 @@ func TestBothHandlersWithJSON(t *testing.T) {
 	assert.NoError(t, err)
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("%s", shortURL.Path), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, originalURL, resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
