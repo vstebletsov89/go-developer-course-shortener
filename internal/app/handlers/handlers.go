@@ -30,10 +30,12 @@ func NewHTTPHandler(cfg *configs.Config, s repository.Repository) *Handler {
 }
 
 func extractUserID(r *http.Request) string {
-	ctx := r.Context().Value(middleware.UserCtx)
-	userID := ctx.(string)
-	log.Printf("userID: %s", userID)
-	return userID
+	userID, ok := r.Context().Value(middleware.UserCtx).(string)
+	if ok {
+		log.Printf("userID: %s", userID)
+		return userID
+	}
+	return ""
 }
 
 func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +50,7 @@ func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
 	var response types.ResponseBatch
 	response, err := h.storage.SaveBatchURLS(userID, request, h.config.BaseURL)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	log.Printf("Response batch JSON: %+v", response)
@@ -58,7 +60,7 @@ func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
 	encoder.SetEscapeHTML(false)
 	err = encoder.Encode(response)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	log.Printf("Encoded JSON: %s", buf.String())
@@ -68,7 +70,7 @@ func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
 
 	_, err = w.Write(buf.Bytes())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -95,23 +97,22 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 
 	userID := extractUserID(r)
 
-	var status = http.StatusCreated
 	var id int
 	id, err = h.storage.SaveURL(userID, longURL)
+	status, err := checkDBViolation(err)
 	if err != nil {
-		var pgError *pgconn.PgError
-		if errors.As(err, &pgError) && pgError.Code == pgerrcode.UniqueViolation {
-			id, err = h.storage.GetShortURLByOriginalURL(longURL)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			status = http.StatusConflict
-		} else {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), status)
+		return
+	}
+
+	if status == http.StatusConflict {
+		id, err = h.storage.GetShortURLByOriginalURL(longURL)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
+
 	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
 
@@ -123,7 +124,7 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	encoder.SetEscapeHTML(false)
 	err = encoder.Encode(response)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	log.Printf("Encoded JSON: %s", buf.String())
@@ -133,9 +134,19 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 
 	_, err = w.Write(buf.Bytes())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func checkDBViolation(err error) (int, error) {
+	var pgError *pgconn.PgError
+	if errors.As(err, &pgError) && pgError.Code == pgerrcode.UniqueViolation {
+		return http.StatusConflict, nil
+	} else if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	return http.StatusCreated, nil
 }
 
 func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
@@ -154,23 +165,22 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 
 	userID := extractUserID(r)
 
-	var status = http.StatusCreated
 	var id int
 	id, err = h.storage.SaveURL(userID, longURL)
+	status, err := checkDBViolation(err)
 	if err != nil {
-		var pgError *pgconn.PgError
-		if errors.As(err, &pgError) && pgError.Code == pgerrcode.UniqueViolation {
-			id, err = h.storage.GetShortURLByOriginalURL(longURL)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			status = http.StatusConflict
-		} else {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), status)
+		return
+	}
+
+	if status == http.StatusConflict {
+		id, err = h.storage.GetShortURLByOriginalURL(longURL)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
+
 	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
 
@@ -178,7 +188,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(status)
 	_, err = w.Write([]byte(shortURL))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -197,14 +207,14 @@ func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) 
 	}
 	body, err := json.Marshal(links)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set(ContentType, ContentValueJSON)
 	w.WriteHeader(http.StatusOK)
 	_, err = w.Write(body)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
