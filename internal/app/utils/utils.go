@@ -3,11 +3,22 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/url"
+	"time"
 )
 
-func MakeShortURL(baseURL string, id int) string {
-	shortURL := fmt.Sprintf("%v/%d", baseURL, id)
+func GenerateRandom(size int) []byte {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, size)
+	for i := range b {
+		b[i] = Letters[rand.Intn(len(Letters))]
+	}
+	return b
+}
+
+func MakeShortURL(baseURL string, id string) string {
+	shortURL := fmt.Sprintf("%v/%s", baseURL, id)
 	return shortURL
 }
 

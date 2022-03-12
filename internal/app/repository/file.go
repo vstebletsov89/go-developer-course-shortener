@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"go-developer-course-shortener/internal/app/types"
-	"go-developer-course-shortener/internal/app/utils"
 	"io"
 	"log"
 	"os"
@@ -17,62 +16,38 @@ type FileRepository struct {
 
 type fileRecord struct {
 	UserID      string `json:"user_id"`
-	ID          int    `json:"id"`
+	ID          string `json:"id"`
 	OriginalURL string `json:"original_url"`
 }
 
-func (r *FileRepository) getNextID() (int, error) {
-	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
-	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
-
-	decoder := json.NewDecoder(file)
-	var counter int
-	for {
-		record := &fileRecord{}
-		if err := decoder.Decode(&record); err == io.EOF {
-			break
-		} else if err != nil {
-			return 0, err
-		}
-		log.Printf("Record from file (count): %+v", record)
-		counter += 1
-	}
-	return counter + 1, nil
-}
-
-func (r *FileRepository) SaveURL(userID string, URL string) (int, error) {
-	id, err := r.getNextID()
-	if err != nil {
-		return 0, err
-	}
-
+func (r *FileRepository) SaveURL(userID string, shortURL string, originalURL string) error {
 	file, err := os.OpenFile(r.fileStoragePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	defer file.Close()
 
 	encoder := json.NewEncoder(file)
-	err = encoder.Encode(&fileRecord{UserID: userID, ID: id, OriginalURL: URL})
+	err = encoder.Encode(&fileRecord{UserID: userID, ID: shortURL, OriginalURL: originalURL})
 	if err != nil {
-		return 0, err
+		return err
 	}
-	return id, nil
+	return nil
 }
 
-func (r *FileRepository) GetShortURLByOriginalURL(originalURL string) (int, error) {
-	return 0, nil
+func (r *FileRepository) GetShortURLByOriginalURL(originalURL string) (string, error) {
+	return "", nil
 }
 
-func (r *FileRepository) SaveBatchURLS(userID string, request types.RequestBatch, baseURL string) (types.ResponseBatch, error) {
+func (r *FileRepository) SaveBatchURLS(userID string, links types.BatchLinks) (types.ResponseBatch, error) {
 	var response types.ResponseBatch
+	for _, v := range links {
+		response = append(response, types.ResponseBatchJSON{CorrelationID: v.CorrelationID, ShortURL: v.ShortURL})
+	}
 	return response, nil
 }
 
-func (r *FileRepository) GetURL(id int) (string, error) {
+func (r *FileRepository) GetURL(shortURL string) (string, error) {
 	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
 		return "", err
@@ -89,14 +64,14 @@ func (r *FileRepository) GetURL(id int) (string, error) {
 		}
 
 		log.Printf("Record from file (get): %+v", record)
-		if record.ID == id {
+		if record.ID == shortURL {
 			return record.OriginalURL, nil
 		}
 	}
 	return "", errors.New("ID not found")
 }
 
-func (r *FileRepository) GetUserStorage(userID string, baseURL string) ([]types.Link, error) {
+func (r *FileRepository) GetUserStorage(userID string) ([]types.Link, error) {
 	var links []types.Link
 	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
@@ -115,10 +90,14 @@ func (r *FileRepository) GetUserStorage(userID string, baseURL string) ([]types.
 
 		log.Printf("Record from file (getUserStorage): %+v", record)
 		if record.UserID == userID {
-			links = append(links, types.Link{ShortURL: utils.MakeShortURL(baseURL, record.ID), OriginalURL: record.OriginalURL})
+			links = append(links, types.Link{ShortURL: record.ID, OriginalURL: record.OriginalURL})
 		}
 	}
 	return links, nil
+}
+
+func (r *FileRepository) Ping() bool {
+	return true
 }
 
 func NewFileRepository(fileStoragePath string) *FileRepository {

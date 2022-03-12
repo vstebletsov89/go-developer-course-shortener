@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/jackc/pgx/v4"
 	"go-developer-course-shortener/internal/app/types"
-	"go-developer-course-shortener/internal/app/utils"
 	"log"
 )
 
@@ -13,47 +12,37 @@ type DBRepository struct {
 	conn *pgx.Conn
 }
 
-func (r *DBRepository) SaveURL(userID string, URL string) (int, error) {
-	row := r.conn.QueryRow(context.Background(), "SELECT COUNT(*) FROM urls")
-	var id int
-	err := row.Scan(&id)
+func (r *DBRepository) SaveURL(userID string, shortURL string, originalURL string) error {
+	sql := `INSERT INTO urls (user_id, short_url, original_url) VALUES ($1, $2, $3)`
+	_, err := r.conn.Exec(context.Background(), sql, userID, shortURL, originalURL)
 	if err != nil {
-		return 0, err
+		return err
 	}
-
-	sql := `INSERT INTO urls (user_id, original_url) VALUES ($1, $2)`
-	_, err = r.conn.Exec(context.Background(), sql, userID, URL)
-	if err != nil {
-		return 0, err
-	}
-	return id + 1, nil
+	return nil
 }
 
-func (r *DBRepository) SaveBatchURLS(userID string, request types.RequestBatch, baseURL string) (types.ResponseBatch, error) {
+func (r *DBRepository) SaveBatchURLS(userID string, links types.BatchLinks) (types.ResponseBatch, error) {
 	ctx := context.Background()
 	tx, err := r.conn.Begin(ctx)
+	defer func() {
+		if err != nil {
+			tx.Rollback(ctx)
+		}
+	}()
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
 
-	sql := `INSERT INTO urls (user_id, original_url) VALUES ($1, $2)`
-
-	row := r.conn.QueryRow(context.Background(), "SELECT COUNT(*) FROM urls")
-	var id int
-	err = row.Scan(&id)
-	if err != nil {
-		return nil, err
-	}
+	sql := `INSERT INTO urls (user_id, short_url, original_url) VALUES ($1, $2, $3)`
 
 	var response types.ResponseBatch
-	for _, v := range request {
-		_, err := tx.Exec(ctx, sql, userID, v.OriginalURL)
+
+	for _, v := range links {
+		_, err := tx.Exec(ctx, sql, userID, v.ShortURL, v.OriginalURL)
 		if err != nil {
 			return nil, err
 		}
-		response = append(response, types.ResponseBatchJSON{CorrelationID: v.CorrelationID, ShortURL: utils.MakeShortURL(baseURL, id+1)})
-		id = id + 1
+		response = append(response, types.ResponseBatchJSON{CorrelationID: v.CorrelationID, ShortURL: v.ShortURL})
 	}
 
 	err = tx.Commit(ctx)
@@ -61,12 +50,12 @@ func (r *DBRepository) SaveBatchURLS(userID string, request types.RequestBatch, 
 		return nil, err
 	}
 
-	return response, nil
+	return nil, nil
 }
 
-func (r *DBRepository) GetURL(id int) (string, error) {
-	sql := `SELECT original_url FROM urls WHERE id = $1`
-	row := r.conn.QueryRow(context.Background(), sql, id)
+func (r *DBRepository) GetURL(shortURL string) (string, error) {
+	sql := `SELECT original_url FROM urls WHERE short_url = $1`
+	row := r.conn.QueryRow(context.Background(), sql, shortURL)
 	var originalURL string
 	err := row.Scan(&originalURL)
 	if err != nil {
@@ -75,20 +64,20 @@ func (r *DBRepository) GetURL(id int) (string, error) {
 	return originalURL, nil
 }
 
-func (r *DBRepository) GetShortURLByOriginalURL(originalURL string) (int, error) {
-	sql := `SELECT id FROM urls WHERE original_url = $1`
+func (r *DBRepository) GetShortURLByOriginalURL(originalURL string) (string, error) {
+	sql := `SELECT short_url FROM urls WHERE original_url = $1`
 	row := r.conn.QueryRow(context.Background(), sql, originalURL)
-	var id int
-	err := row.Scan(&id)
+	var shortURL string
+	err := row.Scan(&shortURL)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	return id, nil
+	return shortURL, nil
 }
 
-func (r *DBRepository) GetUserStorage(userID string, baseURL string) ([]types.Link, error) {
+func (r *DBRepository) GetUserStorage(userID string) ([]types.Link, error) {
 	var links []types.Link
-	sql := `SELECT id, original_url FROM urls WHERE user_id = $1`
+	sql := `SELECT short_url, original_url FROM urls WHERE user_id = $1`
 	rows, err := r.conn.Query(context.Background(), sql, userID)
 	if err != nil {
 		return nil, err
@@ -96,26 +85,26 @@ func (r *DBRepository) GetUserStorage(userID string, baseURL string) ([]types.Li
 	defer rows.Close()
 
 	for rows.Next() {
-		var id int
-		var url string
-		err = rows.Scan(&id, &url)
+		var shortURL string
+		var originalURL string
+		err = rows.Scan(&shortURL, &originalURL)
 		if err != nil {
 			return nil, err
 		}
-		links = append(links, types.Link{ShortURL: utils.MakeShortURL(baseURL, id), OriginalURL: url})
+		links = append(links, types.Link{ShortURL: shortURL, OriginalURL: originalURL})
 	}
 	return links, nil
 }
 
+func (r *DBRepository) Ping() bool {
+	err := r.conn.Ping(context.Background())
+
+	return err == nil
+}
+
 func NewDBRepository(connection *pgx.Conn) (*DBRepository, error) {
 	log.Print("DB storage is used")
-	sql := `create table if not exists urls (
-		id           serial not null primary key,
-		user_id      text,
-		original_url text
-	);
-    create unique index if not exists original_url_ix on urls(original_url);`
-	_, err := connection.Exec(context.Background(), sql)
+	_, err := connection.Exec(context.Background(), PostgreSQLTable)
 	if err != nil {
 		return nil, err
 	}

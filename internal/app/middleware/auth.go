@@ -4,11 +4,12 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/rand"
 	"encoding/hex"
 	"github.com/google/uuid"
+	"go-developer-course-shortener/internal/app/utils"
 	"log"
 	"net/http"
+	"sync"
 )
 
 type cipherData struct {
@@ -18,40 +19,27 @@ type cipherData struct {
 }
 
 var cipherInstance *cipherData
+var once sync.Once
 
 func cipherInit() error {
-	if cipherInstance == nil {
-		key, err := generateRandom(2 * aes.BlockSize)
-		if err != nil {
-			return err
-		}
+	var e error
+	once.Do(func() {
+		key := utils.GenerateRandom(2 * aes.BlockSize)
 
 		aesblock, err := aes.NewCipher(key)
 		if err != nil {
-			return err
+			e = err
 		}
 
 		aesgcm, err := cipher.NewGCM(aesblock)
 		if err != nil {
-			return err
+			e = err
 		}
 
-		nonce, err := generateRandom(aesgcm.NonceSize())
-		if err != nil {
-			return err
-		}
+		nonce := utils.GenerateRandom(aesgcm.NonceSize())
 		cipherInstance = &cipherData{key: key, aesGCM: aesgcm, nonce: nonce}
-	}
-	return nil
-}
-func generateRandom(size int) ([]byte, error) {
-	b := make([]byte, size)
-	_, err := rand.Read(b)
-	if err != nil {
-		return nil, err
-	}
-
-	return b, nil
+	})
+	return e
 }
 
 func encrypt(userID string) (string, error) {

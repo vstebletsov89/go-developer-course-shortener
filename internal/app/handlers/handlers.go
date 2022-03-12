@@ -2,13 +2,11 @@ package handlers
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
-	"github.com/jackc/pgx/v4"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/types"
@@ -17,7 +15,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 type Handler struct {
@@ -47,8 +44,16 @@ func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Request batch JSON: %+v", request)
 
 	userID := extractUserID(r)
+
+	var batchLinks types.BatchLinks
+	for _, v := range request {
+		id := string(utils.GenerateRandom(utils.ShortLinkLength))
+		shortURL := utils.MakeShortURL(h.config.BaseURL, id)
+		batchLinks = append(batchLinks, types.BatchLink{CorrelationID: v.CorrelationID, ShortURL: shortURL, OriginalURL: v.OriginalURL})
+	}
+
 	var response types.ResponseBatch
-	response, err := h.storage.SaveBatchURLS(userID, request, h.config.BaseURL)
+	response, err := h.storage.SaveBatchURLS(userID, batchLinks)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -97,8 +102,11 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 
 	userID := extractUserID(r)
 
-	var id int
-	id, err = h.storage.SaveURL(userID, longURL)
+	id := string(utils.GenerateRandom(utils.ShortLinkLength))
+	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
+	log.Printf("Short URL: %v", shortURL)
+
+	err = h.storage.SaveURL(userID, shortURL, longURL)
 	status, err := checkDBViolation(err)
 	if err != nil {
 		http.Error(w, err.Error(), status)
@@ -106,15 +114,12 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if status == http.StatusConflict {
-		id, err = h.storage.GetShortURLByOriginalURL(longURL)
+		shortURL, err = h.storage.GetShortURLByOriginalURL(longURL)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
-
-	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
-	log.Printf("Short URL: %v", shortURL)
 
 	response := types.ResponseJSON{Result: shortURL}
 	log.Printf("Response JSON: %+v", response)
@@ -165,8 +170,11 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 
 	userID := extractUserID(r)
 
-	var id int
-	id, err = h.storage.SaveURL(userID, longURL)
+	id := string(utils.GenerateRandom(utils.ShortLinkLength))
+	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
+	log.Printf("Short URL: %v", shortURL)
+
+	err = h.storage.SaveURL(userID, shortURL, longURL)
 	status, err := checkDBViolation(err)
 	if err != nil {
 		http.Error(w, err.Error(), status)
@@ -174,15 +182,12 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if status == http.StatusConflict {
-		id, err = h.storage.GetShortURLByOriginalURL(longURL)
+		shortURL, err = h.storage.GetShortURLByOriginalURL(longURL)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
-
-	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
-	log.Printf("Short URL: %v", shortURL)
 
 	w.Header().Set(ContentType, ContentValuePlainText)
 	w.WriteHeader(status)
@@ -196,7 +201,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) {
 	userID := extractUserID(r)
 	log.Printf("Get all links for userID: %s", userID)
-	links, err := h.storage.GetUserStorage(userID, h.config.BaseURL)
+	links, err := h.storage.GetUserStorage(userID)
 	if err != nil {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -222,14 +227,8 @@ func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	strID := chi.URLParam(r, "ID")
 	log.Printf("strID: `%s`", strID)
-	id, err := strconv.Atoi(strID)
-	if err != nil || id < 1 {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
-	}
-	log.Printf("ID: %d", id)
 
-	originalURL, err := h.storage.GetURL(id)
+	originalURL, err := h.storage.GetURL(utils.MakeShortURL(h.config.BaseURL, strID))
 	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)
 		return
@@ -241,11 +240,9 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandlerPing(w http.ResponseWriter, r *http.Request) {
-	conn, err := pgx.Connect(r.Context(), h.config.DatabaseDsn)
-	if err != nil {
+	if !h.storage.Ping() {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	defer conn.Close(context.Background())
 	w.WriteHeader(http.StatusOK)
 }
