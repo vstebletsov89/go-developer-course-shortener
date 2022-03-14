@@ -2,16 +2,21 @@ package handlers
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
+	"go-developer-course-shortener/internal/app/types"
 	"go-developer-course-shortener/internal/configs"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 )
@@ -36,6 +41,13 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io
 	return resp, string(respBody)
 }
 
+func AuthHandleMock(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), middleware.UserCtx, "4b003ed0-4d8f-46eb-8322-e90174110517")
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func NewRouter(config *configs.Config) chi.Router {
 	var storage repository.Repository
 	if config.FileStoragePath != "" {
@@ -47,6 +59,7 @@ func NewRouter(config *configs.Config) chi.Router {
 
 	log.Printf("Server started on %v", config.ServerAddress)
 	r := chi.NewRouter()
+	r.Use(AuthHandleMock)
 
 	// маршрутизация запросов обработчику
 	r.Post("/", handler.HandlerPOST)
@@ -77,13 +90,13 @@ func TestBothHandlersFileStorageInvalidRecord(t *testing.T) {
 	defer ts.Close()
 
 	//сначала подготавливаем сокращенную ссылку через POST
-	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo1"))
+	originalURL := "https://github.com/test_repo1"
+	resp, _ := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.Equal(t, body, "http://localhost:8080/1")
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 999), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, "/AAAAA", nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -109,13 +122,15 @@ func TestBothHandlersFileStorageOneRecord(t *testing.T) {
 	defer ts.Close()
 
 	//сначала подготавливаем сокращенную ссылку через POST
-	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo1"))
+	originalURL := "https://github.com/test_repo1"
+	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.Equal(t, body, "http://localhost:8080/1")
+	shortURL, err := url.Parse(body)
+	assert.NoError(t, err)
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 1), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
@@ -141,25 +156,28 @@ func TestBothHandlersFileStorageTwoRecords(t *testing.T) {
 	defer ts.Close()
 
 	//сначала подготавливаем сокращенную ссылку через POST
-	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo1"))
+	originalURL := "https://github.com/test_repo1"
+	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.Equal(t, body, "http://localhost:8080/1")
+	shortURL1, err := url.Parse(body)
+	assert.NoError(t, err)
 
 	//сначала подготавливаем сокращенную ссылку через POST
 	resp, body = testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo2"))
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.Equal(t, body, "http://localhost:8080/2")
+	shortURL2, err := url.Parse(body)
+	assert.NoError(t, err)
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 2), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, shortURL2.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo2", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 1), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, shortURL1.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
@@ -176,13 +194,15 @@ func TestBothHandlersMemoryStorage(t *testing.T) {
 	defer ts.Close()
 
 	//сначала подготавливаем сокращенную ссылку через POST
-	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo1"))
+	originalURL := "https://github.com/test_repo1"
+	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.Equal(t, body, "http://localhost:8080/1")
+	shortURL, err := url.Parse(body)
+	assert.NoError(t, err)
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 1), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
@@ -199,15 +219,20 @@ func TestBothHandlersWithJSON(t *testing.T) {
 	defer ts.Close()
 
 	//сначала подготавливаем сокращенную ссылку через POST /api/shorten
+	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.JSONEq(t, body, "{\"result\":\"http://localhost:8080/1\"}")
+	var response types.ResponseJSON
+	err := json.Unmarshal([]byte(body), &response)
+	assert.NoError(t, err)
+	shortURL, err := url.Parse(response.Result)
+	assert.NoError(t, err)
 
 	//получаем оригинальную ссылку через GET запрос
-	resp, _ = testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", 1), nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
 	defer resp.Body.Close()
-	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
+	assert.Equal(t, originalURL, resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 }
 
@@ -229,15 +254,6 @@ func TestHandlerGetErrors(t *testing.T) {
 				headerLocation: "",
 				statusCode:     http.StatusBadRequest,
 				responseBody:   "ID not found\n",
-			},
-		},
-		{
-			name: "Test #2",
-			id:   -555,
-			want: want{
-				headerLocation: "",
-				statusCode:     http.StatusBadRequest,
-				responseBody:   "Invalid ID\n",
 			},
 		},
 	}
@@ -275,15 +291,6 @@ func TestHandlerPost(t *testing.T) {
 	}{
 		{
 			name:    "Test #1",
-			longURL: "https://practicum.yandex.ru/learn/go-developer/courses/",
-			want: want{
-				contentType:  ContentValuePlainText,
-				statusCode:   http.StatusCreated,
-				responseBody: "http://localhost:8080/1",
-			},
-		},
-		{
-			name:    "Test #2",
 			longURL: "",
 			want: want{
 				contentType:  ContentValuePlainText,
@@ -292,7 +299,7 @@ func TestHandlerPost(t *testing.T) {
 			},
 		},
 		{
-			name:    "Test #3",
+			name:    "Test #2",
 			longURL: "htt p://incorrect_url_here",
 			want: want{
 				contentType:  ContentValuePlainText,
@@ -333,16 +340,6 @@ func TestHandlerJsonPost(t *testing.T) {
 		jsonBody string
 		want     want
 	}{
-		{
-			name:     "test valid JSON request",
-			jsonBody: `{"url": "<some_url>"}`,
-			want: want{
-				contentType:  ContentValueJSON,
-				statusCode:   http.StatusCreated,
-				responseBody: `{"result": "http://localhost:8080/1"}`,
-				checkJSON:    true,
-			},
-		},
 		{
 			name:     "test invalid format for JSON request",
 			jsonBody: `{"invalid": "<some_url>"}`,
