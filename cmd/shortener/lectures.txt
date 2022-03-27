@@ -1,0 +1,112 @@
+Паттерны fan-in и fan-out
+Представьте, что некий канал с данными нужно разделить на несколько дочерних каналов, каждый из которых должен обрабатываться воркером в отдельном потоке. При этом если родительский канал закроется, то закроются и все дочерние.
+Затем нужно снова объединить дочерние каналы, сливая результаты обработки данных в одно место. Этот единый канал закроется тогда, когда каждый из входных каналов будет закрыт.
+Первая часть условия описывает паттерн fan-out, а вторая — fan-in.
+
+Начнём с того, что разделим изначальный канал на N каналов, где N равно числу воркеров, которые будут обрабатывать данные. Для этого создадим слайс из N каналов, куда будем раскладывать данные в отдельной горутине по принципу round-robin. Когда родительский канал будет закрыт, горутина завершит работу.
+func fanOut(inputCh chan int, n int) []chan int {
+    chs := make([]chan int, 0, n)
+    for i := 0; i < n; i++ {
+        ch := make(chan int)
+        chs = append(chs, ch)
+    }
+
+    go func() {
+        defer func(chs []chan int) {
+            for _, ch := range chs {
+                close(ch)
+            }
+        }(chs)
+
+        for i := 0; ; i++ {
+            if i == len(chs) {
+                i = 0
+            }
+
+            num, ok := <-inputCh
+            if !ok {
+                return
+            }
+
+            ch := chs[i]
+            ch <- num
+        }
+    }()
+
+    return chs
+}
+
+Затем реализуем вычитывание канала с данными в несколько потоков. Объявим функцию, которая запускает горутину воркера и возвращает его выходной канал. В этот канал воркер будет складывать результат работы над входными данными.
+В данном случае он делит все пришедшие ему из входного канала числа на 2. После закрытия входного канала, который будет общим для всех воркеров, этот воркер закрывает свой выходной канал.
+
+func newWorker(inputCh <-chan int) (chan int) {
+    outCh := make(chan int)
+
+    go func() {
+        for num := range inputCh {
+            outCh <- num / 2
+        }
+
+        close(outCh)
+    }()
+
+    return outCh
+}
+Напишем fanIn-функцию. Она будет принимать входные каналы как variadic-аргумент, а затем запускать по одной горутине для каждого входного канала. Горутина будет перенаправлять вычитанные из входного канала данные в выходной канал. Чтобы вести учёт запущенных горутин, используем sync.WaitGroup и заблокируемся на wg.Wait. Тогда выходной канал закроется только после того, как закроются все входные каналы.
+func fanIn(inputChs ...chan int) (chan int) {
+    outCh := make(chan int)
+
+    go func() {
+        wg := &sync.WaitGroup{}
+
+        for _, inputCh := range inputChs {
+            wg.Add(1)
+
+            go func(inputCh chan int) {
+                defer wg.Done()
+                for item := range inputCh {
+                    outCh <- item
+                }
+            }(inputCh)
+        }
+
+        wg.Wait()
+        close(outCh)
+    }()
+
+    return outCh
+}
+Также напишем функцию main, которая создаст 10 воркеров, передаст их выходные каналы в fanIn и выведет результаты в консоль:
+package main
+
+import "fmt"
+
+const workersCount = 10
+
+func main() {
+    inputCh := make(chan int)
+
+    // генерируем входные значения и кладём в inputCh
+    go func() {
+        for i := 0; i < 100; i++ {
+            for j := 0; j < 120; j++ {
+                inputCh <- i * j
+            }
+        }
+
+        close(inputCh)
+    }()
+
+    // здесь fanOut
+    fanOutChs := fanOut(inputCh, workersCount)
+    workerChs := make([]chan int, 0, workersCount)
+    for _, fanOutCh := range fanOutChs {
+        w := newWorker(fanOutCh)
+        workerChs = append(workerChs, w)
+    }
+
+    // здесь fanIn
+    for v := range fanIn(workerChs...) {
+        fmt.Println(v)
+    }
+}
