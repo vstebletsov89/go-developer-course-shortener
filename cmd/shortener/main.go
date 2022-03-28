@@ -40,7 +40,7 @@ func main() {
 	}
 	handler := handlers.NewHTTPHandler(config, storage)
 
-	//setup worker pool to handle delete requests
+	// setup worker pool to handle delete requests
 	jobs := make(chan worker.Job, worker.MaxWorkerPoolSize)
 	workerPool := worker.NewWorkerPool(storage, jobs)
 	go workerPool.Run(context.Background())
@@ -59,20 +59,4 @@ func main() {
 	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(jobs))
 
 	log.Fatal(http.ListenAndServe(config.ServerAddress, r))
-
-	//TODO:
-	//	Задание для трека «Сервис сокращения URL»
-	//	Сделайте в таблице базы данных с сокращёнными URL дополнительное поле с флагом,
-	//	указывающим на то, что URL должен считаться удалённым.
-	//		Далее добавьте в сервис новый асинхронный хендлер DELETE /api/user/urls,
-	//		который принимает список идентификаторов сокращённых URL для удаления в формате:
-	//		[ "a", "b", "c", "d", ...]
-	//	В случае успешного приёма запроса хендлер должен возвращать HTTP-статус 202 Accepted.
-	//	Фактический результат удаления может происходить позже — каким-либо образом оповещать пользователя
-	//	об успешности или неуспешности не нужно.
-	//	Успешно удалить URL может пользователь, его создавший.
-	//	При запросе удалённого URL с помощью хендлера GET /{id} нужно вернуть статус 410 Gone.
-	//	Совет:
-	//	Для эффективного проставления флага удаления в базе данных используйте множественное обновление (batch update).
-	//	Используйте паттерн fanIn для максимального наполнения буфера объектов обновления.
 }
