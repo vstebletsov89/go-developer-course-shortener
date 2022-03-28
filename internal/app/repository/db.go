@@ -31,13 +31,11 @@ func (r *DBRepository) SaveURL(userID string, shortURL string, originalURL strin
 }
 
 func (r *DBRepository) DeleteURLS(ctx context.Context, userID string, shortURLS []string) error {
-	log.Printf("DeleteURLS start")
 	sql := `UPDATE urls SET deleted = true WHERE user_id = $1 AND short_url = ANY($2)`
 	_, err := r.conn.Exec(ctx, sql, userID, shortURLS)
 	if err != nil {
 		return err
 	}
-	log.Printf("DeleteURLS done")
 	return nil
 }
 
