@@ -213,12 +213,18 @@ func (h *Handler) HandlerUseStorageDELETE(job chan worker.Job) http.HandlerFunc 
 		userID := extractUserID(r)
 		log.Printf("Delete all links for userID: %s", userID)
 
-		var shortURLS []string
-		if err := json.NewDecoder(r.Body).Decode(&shortURLS); err != nil {
+		var deleteURLS []string
+		if err := json.NewDecoder(r.Body).Decode(&deleteURLS); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		log.Printf("Request delete shortURLS: %+v", shortURLS)
+		log.Printf("Request deleteURLS: %+v", deleteURLS)
+
+		var shortURLS []string
+		for _, id := range deleteURLS {
+			shortURLS = append(shortURLS, MakeShortURL(h.config.BaseURL, id))
+		}
+		log.Printf("Request shortURLS: %+v", shortURLS)
 
 		j := worker.Job{UserID: userID, ShortURLS: shortURLS}
 		job <- j
