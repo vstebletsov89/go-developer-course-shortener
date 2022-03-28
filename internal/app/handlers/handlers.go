@@ -262,6 +262,7 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	originalLink, err := h.storage.GetURL(MakeShortURL(h.config.BaseURL, strID))
 	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)
+		log.Printf("error: %s", err)
 		return
 	}
 	log.Printf("Original URL: %s deleted: %v", originalLink.OriginalURL, originalLink.Deleted)
