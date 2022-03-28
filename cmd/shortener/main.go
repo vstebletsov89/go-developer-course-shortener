@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -43,7 +44,9 @@ func main() {
 	//setup worker pool to handle delete requests
 	jobs := make(chan worker.Job, worker.MaxWorkerPoolSize)
 	workerPool := worker.NewWorkerPool(storage, jobs)
-	go workerPool.Run(context.Background())
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*20))
+	defer cancel()
+	go workerPool.Run(ctx)
 
 	log.Printf("Server started on %v", config.ServerAddress)
 	r := chi.NewRouter()

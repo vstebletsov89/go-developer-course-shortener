@@ -37,6 +37,7 @@ func (p *Pool) Run(ctx context.Context) {
 				}
 			}()
 		case <-ctx.Done():
+			log.Println("Worker pool context done")
 			return
 		}
 	}
