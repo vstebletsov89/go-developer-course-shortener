@@ -222,10 +222,10 @@ func (h *Handler) HandlerUseStorageDELETE(job chan worker.Job) http.HandlerFunc 
 
 		j := worker.Job{UserID: userID, ShortURLS: shortURLS}
 		job <- j
-		log.Printf("New worker created: %+v", j)
 
 		w.Header().Set(ContentType, ContentValueJSON)
 		w.WriteHeader(http.StatusAccepted)
+		log.Printf("New worker created: %+v", j)
 	}
 }
 
@@ -262,7 +262,6 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	originalLink, err := h.storage.GetURL(MakeShortURL(h.config.BaseURL, strID))
 	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)
-		log.Printf("error: %s", err)
 		return
 	}
 	log.Printf("Original URL: %s deleted: %v", originalLink.OriginalURL, originalLink.Deleted)

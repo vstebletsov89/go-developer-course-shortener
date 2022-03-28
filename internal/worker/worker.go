@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"go-developer-course-shortener/internal/app/repository"
+	"log"
 	"sync"
 )
 
@@ -30,10 +31,12 @@ func (p *Pool) Run(ctx context.Context) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				p.repository.DeleteURLS(ctx, v.UserID, v.ShortURLS)
+				if err := p.repository.DeleteURLS(ctx, v.UserID, v.ShortURLS); err != nil {
+					log.Println(err)
+					return
+				}
 			}()
 		case <-ctx.Done():
-			wg.Wait()
 			return
 		}
 	}
