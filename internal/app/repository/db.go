@@ -73,10 +73,9 @@ func (r *DBRepository) SaveBatchURLS(userID string, links types.BatchLinks) (typ
 
 func (r *DBRepository) GetURL(shortURL string) (types.OriginalLink, error) {
 	sql := `SELECT original_url, deleted FROM urls WHERE short_url = $1`
-	log.Printf("sql %s", sql)
 	row := r.conn.QueryRow(context.Background(), sql, shortURL)
 	var originalLink types.OriginalLink
-	err := row.Scan(&originalLink)
+	err := row.Scan(&originalLink.OriginalURL, &originalLink.Deleted)
 	if err != nil {
 		return originalLink, err
 	}
