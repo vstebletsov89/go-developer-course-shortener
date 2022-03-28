@@ -13,6 +13,7 @@ import (
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/types"
 	"go-developer-course-shortener/internal/configs"
+	"go-developer-course-shortener/internal/worker"
 	"io"
 	"log"
 	"net/http"
@@ -207,6 +208,27 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) HandlerUseStorageDELETE(job chan worker.Job) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := extractUserID(r)
+		log.Printf("Delete all links for userID: %s", userID)
+
+		var shortURLS []string
+		if err := json.NewDecoder(r.Body).Decode(&shortURLS); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		log.Printf("Request delete shortURLS: %+v", shortURLS)
+
+		j := worker.Job{UserID: userID, ShortURLS: shortURLS}
+		job <- j
+		log.Printf("New worker created: %+v", j)
+
+		w.Header().Set(ContentType, ContentValueJSON)
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
 func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) {
 	userID := extractUserID(r)
 	log.Printf("Get all links for userID: %s", userID)
@@ -237,15 +259,20 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	strID := chi.URLParam(r, "ID")
 	log.Printf("strID: `%s`", strID)
 
-	originalURL, err := h.storage.GetURL(MakeShortURL(h.config.BaseURL, strID))
+	originalLink, err := h.storage.GetURL(MakeShortURL(h.config.BaseURL, strID))
 	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)
 		return
 	}
-	log.Printf("Original URL: %s", originalURL)
+	log.Printf("Original URL: %s deleted: %v", originalLink.OriginalURL, originalLink.Deleted)
+
 	w.Header().Set(ContentType, ContentValuePlainText)
-	w.Header().Set("Location", originalURL)
-	w.WriteHeader(http.StatusTemporaryRedirect)
+	w.Header().Set("Location", originalLink.OriginalURL)
+	if !originalLink.Deleted {
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	} else {
+		w.WriteHeader(http.StatusGone)
+	}
 }
 
 func (h *Handler) HandlerPing(w http.ResponseWriter, r *http.Request) {

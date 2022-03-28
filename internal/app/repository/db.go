@@ -11,7 +11,8 @@ const PostgreSQLTable = `create table if not exists urls (
 		id           serial not null primary key,
 		user_id      text,
         short_url    text,
-		original_url text
+		original_url text,
+        deleted      boolean
 	);
     create unique index if not exists original_url_ix on urls(original_url);`
 
@@ -23,6 +24,15 @@ type DBRepository struct {
 func (r *DBRepository) SaveURL(userID string, shortURL string, originalURL string) error {
 	sql := `INSERT INTO urls (user_id, short_url, original_url) VALUES ($1, $2, $3)`
 	_, err := r.conn.Exec(context.Background(), sql, userID, shortURL, originalURL)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *DBRepository) DeleteURLS(ctx context.Context, userID string, shortURLS []string) error {
+	sql := `UPDATE urls SET deleted = true WHERE user_id = $1 AND short_url = ANY($2)`
+	_, err := r.conn.Exec(ctx, sql, userID, shortURLS)
 	if err != nil {
 		return err
 	}
@@ -61,15 +71,15 @@ func (r *DBRepository) SaveBatchURLS(userID string, links types.BatchLinks) (typ
 	return response, nil
 }
 
-func (r *DBRepository) GetURL(shortURL string) (string, error) {
-	sql := `SELECT original_url FROM urls WHERE short_url = $1`
+func (r *DBRepository) GetURL(shortURL string) (types.OriginalLink, error) {
+	sql := `SELECT original_url, deleted FROM urls WHERE short_url = $1`
 	row := r.conn.QueryRow(context.Background(), sql, shortURL)
-	var originalURL string
-	err := row.Scan(&originalURL)
+	var originalLink types.OriginalLink
+	err := row.Scan(&originalLink)
 	if err != nil {
-		return "", err
+		return originalLink, err
 	}
-	return originalURL, nil
+	return originalLink, nil
 }
 
 func (r *DBRepository) GetShortURLByOriginalURL(originalURL string) (string, error) {
