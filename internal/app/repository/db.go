@@ -12,7 +12,7 @@ const PostgreSQLTable = `create table if not exists urls (
 		user_id      text,
         short_url    text,
 		original_url text,
-        deleted      boolean
+        deleted      boolean default false
 	);
     create unique index if not exists original_url_ix on urls(original_url);`
 
