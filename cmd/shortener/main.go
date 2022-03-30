@@ -8,6 +8,7 @@ import (
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/configs"
+	"go-developer-course-shortener/internal/worker"
 	"log"
 	"net/http"
 	"os"
@@ -39,6 +40,11 @@ func main() {
 	}
 	handler := handlers.NewHTTPHandler(config, storage)
 
+	// setup worker pool to handle delete requests
+	jobs := make(chan worker.Job, worker.MaxWorkerPoolSize)
+	workerPool := worker.NewWorkerPool(storage, jobs)
+	go workerPool.Run(context.Background())
+
 	log.Printf("Server started on %v", config.ServerAddress)
 	r := chi.NewRouter()
 	r.Use(middleware.GzipHandle, middleware.AuthHandle)
@@ -50,6 +56,7 @@ func main() {
 	r.Get("/{ID}", handler.HandlerGET)
 	r.Get("/api/user/urls", handler.HandlerUserStorageGET)
 	r.Get("/ping", handler.HandlerPing)
+	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(jobs))
 
 	log.Fatal(http.ListenAndServe(config.ServerAddress, r))
 }

@@ -11,4 +11,9 @@ type BatchLink struct {
 	OriginalURL   string
 }
 
+type OriginalLink struct {
+	OriginalURL string
+	Deleted     bool
+}
+
 type BatchLinks []BatchLink

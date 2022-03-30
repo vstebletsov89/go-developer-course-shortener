@@ -4,17 +4,27 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
 	"go-developer-course-shortener/internal/app/middleware"
+	"go-developer-course-shortener/internal/app/rand"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/types"
-	"go-developer-course-shortener/internal/app/utils"
 	"go-developer-course-shortener/internal/configs"
+	"go-developer-course-shortener/internal/worker"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+)
+
+const (
+	ContentType           = "Content-Type"
+	ContentValuePlainText = "text/plain; charset=utf-8"
+	ContentValueJSON      = "application/json"
+	shortLinkLength       = 5
 )
 
 type Handler struct {
@@ -47,8 +57,8 @@ func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
 
 	var batchLinks types.BatchLinks
 	for _, v := range request {
-		id := string(utils.GenerateRandom(utils.ShortLinkLength))
-		shortURL := utils.MakeShortURL(h.config.BaseURL, id)
+		id := string(rand.GenerateRandom(shortLinkLength))
+		shortURL := MakeShortURL(h.config.BaseURL, id)
 		batchLinks = append(batchLinks, types.BatchLink{CorrelationID: v.CorrelationID, ShortURL: shortURL, OriginalURL: v.OriginalURL})
 	}
 
@@ -94,7 +104,7 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Request JSON: %+v", request)
 
 	log.Printf("Long URL: %v", request.URL)
-	longURL, err := utils.ParseURL(request.URL)
+	longURL, err := ParseURL(request.URL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -102,8 +112,8 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 
 	userID := extractUserID(r)
 
-	id := string(utils.GenerateRandom(utils.ShortLinkLength))
-	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
+	id := string(rand.GenerateRandom(shortLinkLength))
+	shortURL := MakeShortURL(h.config.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
 
 	err = h.storage.SaveURL(userID, shortURL, longURL)
@@ -162,7 +172,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Long URL: %v", string(body))
-	longURL, err := utils.ParseURL(string(body))
+	longURL, err := ParseURL(string(body))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -170,8 +180,8 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 
 	userID := extractUserID(r)
 
-	id := string(utils.GenerateRandom(utils.ShortLinkLength))
-	shortURL := utils.MakeShortURL(h.config.BaseURL, id)
+	id := string(rand.GenerateRandom(shortLinkLength))
+	shortURL := MakeShortURL(h.config.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
 
 	err = h.storage.SaveURL(userID, shortURL, longURL)
@@ -195,6 +205,33 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+}
+
+func (h *Handler) HandlerUseStorageDELETE(job chan worker.Job) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := extractUserID(r)
+		log.Printf("Delete all links for userID: %s", userID)
+
+		var deleteURLS []string
+		if err := json.NewDecoder(r.Body).Decode(&deleteURLS); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		log.Printf("Request deleteURLS: %+v", deleteURLS)
+
+		var shortURLS []string
+		for _, id := range deleteURLS {
+			shortURLS = append(shortURLS, MakeShortURL(h.config.BaseURL, id))
+		}
+		log.Printf("Request shortURLS: %+v", shortURLS)
+
+		j := worker.Job{UserID: userID, ShortURLS: shortURLS}
+		job <- j
+
+		w.Header().Set(ContentType, ContentValueJSON)
+		w.WriteHeader(http.StatusAccepted)
+		log.Printf("New worker created: %+v", j)
 	}
 }
 
@@ -228,15 +265,20 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	strID := chi.URLParam(r, "ID")
 	log.Printf("strID: `%s`", strID)
 
-	originalURL, err := h.storage.GetURL(utils.MakeShortURL(h.config.BaseURL, strID))
+	originalLink, err := h.storage.GetURL(MakeShortURL(h.config.BaseURL, strID))
 	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)
 		return
 	}
-	log.Printf("Original URL: %s", originalURL)
+	log.Printf("Original URL: %s deleted: %v", originalLink.OriginalURL, originalLink.Deleted)
+
 	w.Header().Set(ContentType, ContentValuePlainText)
-	w.Header().Set("Location", originalURL)
-	w.WriteHeader(http.StatusTemporaryRedirect)
+	w.Header().Set("Location", originalLink.OriginalURL)
+	if !originalLink.Deleted {
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	} else {
+		w.WriteHeader(http.StatusGone)
+	}
 }
 
 func (h *Handler) HandlerPing(w http.ResponseWriter, r *http.Request) {
@@ -245,4 +287,20 @@ func (h *Handler) HandlerPing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func MakeShortURL(baseURL string, id string) string {
+	shortURL := fmt.Sprintf("%v/%s", baseURL, id)
+	return shortURL
+}
+
+func ParseURL(strURL string) (string, error) {
+	longURL, err := url.Parse(strURL)
+	if err != nil {
+		return "", err
+	}
+	if longURL.String() == "" {
+		return "", errors.New("URL must not be empty")
+	}
+	return longURL.String(), nil
 }

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"go-developer-course-shortener/internal/app/types"
@@ -47,10 +48,14 @@ func (r *FileRepository) SaveBatchURLS(userID string, links types.BatchLinks) (t
 	return response, nil
 }
 
-func (r *FileRepository) GetURL(shortURL string) (string, error) {
+func (r *FileRepository) DeleteURLS(ctx context.Context, userID string, shortURLS []string) error {
+	return nil
+}
+
+func (r *FileRepository) GetURL(shortURL string) (types.OriginalLink, error) {
 	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
-		return "", err
+		return types.OriginalLink{}, err
 	}
 	defer file.Close()
 
@@ -60,15 +65,15 @@ func (r *FileRepository) GetURL(shortURL string) (string, error) {
 		if err := decoder.Decode(&record); err == io.EOF {
 			break
 		} else if err != nil {
-			return "", err
+			return types.OriginalLink{}, err
 		}
 
 		log.Printf("Record from file (get): %+v", record)
 		if record.ID == shortURL {
-			return record.OriginalURL, nil
+			return types.OriginalLink{OriginalURL: record.OriginalURL, Deleted: false}, nil
 		}
 	}
-	return "", errors.New("ID not found")
+	return types.OriginalLink{}, errors.New("ID not found")
 }
 
 func (r *FileRepository) GetUserStorage(userID string) ([]types.Link, error) {

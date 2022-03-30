@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"go-developer-course-shortener/internal/app/types"
 	"log"
@@ -22,6 +23,10 @@ func (r *InMemoryRepository) GetShortURLByOriginalURL(originalURL string) (strin
 	return "", nil
 }
 
+func (r *InMemoryRepository) DeleteURLS(ctx context.Context, userID string, shortURLS []string) error {
+	return nil
+}
+
 func (r *InMemoryRepository) SaveBatchURLS(userID string, links types.BatchLinks) (types.ResponseBatch, error) {
 	var response types.ResponseBatch
 	for _, v := range links {
@@ -30,12 +35,12 @@ func (r *InMemoryRepository) SaveBatchURLS(userID string, links types.BatchLinks
 	return response, nil
 }
 
-func (r *InMemoryRepository) GetURL(shortURL string) (string, error) {
+func (r *InMemoryRepository) GetURL(shortURL string) (types.OriginalLink, error) {
 	URL, ok := r.inMemoryMap[shortURL]
 	if !ok {
-		return "", errors.New("ID not found")
+		return types.OriginalLink{}, errors.New("ID not found")
 	}
-	return URL, nil
+	return types.OriginalLink{OriginalURL: URL, Deleted: false}, nil
 }
 
 func (r *InMemoryRepository) GetUserStorage(userID string) ([]types.Link, error) {
