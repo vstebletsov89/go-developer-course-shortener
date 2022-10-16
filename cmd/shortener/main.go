@@ -11,6 +11,7 @@ import (
 	"go-developer-course-shortener/internal/worker"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 )
 
