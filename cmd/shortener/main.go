@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v4"
 	"go-developer-course-shortener/internal/app/handlers"
 	"go-developer-course-shortener/internal/app/middleware"
@@ -47,17 +47,33 @@ func main() {
 	go workerPool.Run(context.Background())
 
 	log.Printf("Server started on %v", config.ServerAddress)
-	r := chi.NewRouter()
-	r.Use(middleware.GzipHandle, middleware.AuthHandle)
 
-	// routing
-	r.Post("/", handler.HandlerPOST)
-	r.Post("/api/shorten", handler.HandlerJSONPOST)
-	r.Post("/api/shorten/batch", handler.HandlerBatchPOST)
-	r.Get("/{ID}", handler.HandlerGET)
-	r.Get("/api/user/urls", handler.HandlerUserStorageGET)
-	r.Get("/ping", handler.HandlerPing)
-	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(jobs))
+	type server struct {
+		router *mux.Router
+	}
+	s := &server{
+		router: mux.NewRouter(),
+	}
+	s.router.Use(middleware.GzipHandle, middleware.AuthHandle)
+	s.router.HandleFunc("/", handler.HandlerPOST).Methods(http.MethodPost)
+	s.router.HandleFunc("/api/shorten", handler.HandlerJSONPOST).Methods(http.MethodPost)
+	s.router.HandleFunc("/api/shorten/batch", handler.HandlerBatchPOST).Methods(http.MethodPost)
+	s.router.HandleFunc("/{ID}", handler.HandlerGET).Methods(http.MethodGet)
+	s.router.HandleFunc("/api/user/urls", handler.HandlerUserStorageGET).Methods(http.MethodGet)
+	s.router.HandleFunc("/ping", handler.HandlerPing).Methods(http.MethodGet)
+	s.router.HandleFunc("/api/user/urls", handler.HandlerUseStorageDELETE(jobs)).Methods(http.MethodDelete)
 
-	log.Fatal(http.ListenAndServe(config.ServerAddress, r))
+	//r := chi.NewRouter()
+	//r.Use(middleware.GzipHandle, middleware.AuthHandle)
+	//
+	//// routing
+	//r.Post("/", handler.HandlerPOST)
+	//r.Post("/api/shorten", handler.HandlerJSONPOST)
+	//r.Post("/api/shorten/batch", handler.HandlerBatchPOST)
+	//r.Get("/{ID}", handler.HandlerGET)
+	//r.Get("/api/user/urls", handler.HandlerUserStorageGET)
+	//r.Get("/ping", handler.HandlerPing)
+	//r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(jobs))
+	//
+	log.Fatal(http.ListenAndServe(config.ServerAddress, s.router))
 }

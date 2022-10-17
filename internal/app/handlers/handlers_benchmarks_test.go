@@ -3,7 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/mux"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/configs"
@@ -62,7 +62,7 @@ import (
 //Изучите полученный профиль, определите и исправьте неэффективные части вашего кода.
 //Повторите пункт 1 и сохраните новый профиль потребления памяти в директорию profiles с именем result.pprof.
 //Проверьте результат внесённых изменений командой:
-//pprof -top -diff_base=profiles/base.pprof profiles/result.pprof
+//go tool pprof -top -diff_base=profiles/base.pprof profiles/result.pprof
 //В случае успешной оптимизации вы увидите в выводе командной строки результаты
 //с отрицательными значениями, означающими уменьшение потребления ресурсов.
 //Внимание: к концу текущего спринта покрытие вашего кода автотестами должно быть не менее 40%.
@@ -93,7 +93,7 @@ func AuthHandleMockBenchmark(next http.Handler) http.Handler {
 	})
 }
 
-func NewRouterBenchmark(config *configs.Config) chi.Router {
+func NewRouterBenchmark(config *configs.Config) *mux.Router {
 	var storage repository.Repository
 	if config.FileStoragePath != "" {
 		storage = repository.NewFileRepository(config.FileStoragePath)
@@ -103,20 +103,33 @@ func NewRouterBenchmark(config *configs.Config) chi.Router {
 	handler := NewHTTPHandler(config, storage)
 
 	log.Printf("Server started on %v", config.ServerAddress)
-	r := chi.NewRouter()
-	r.Use(AuthHandleMockBenchmark)
+	type server struct {
+		router *mux.Router
+	}
+	s := &server{
+		router: mux.NewRouter(),
+	}
+	s.router.Use(AuthHandleMockBenchmark)
+	s.router.HandleFunc("/", handler.HandlerPOST).Methods(http.MethodPost)
+	s.router.HandleFunc("/api/shorten", handler.HandlerJSONPOST).Methods(http.MethodPost)
+	s.router.HandleFunc("/api/shorten/batch", handler.HandlerBatchPOST).Methods(http.MethodPost)
+	s.router.HandleFunc("/{ID}", handler.HandlerGET).Methods(http.MethodGet)
+	s.router.HandleFunc("/api/user/urls", handler.HandlerUserStorageGET).Methods(http.MethodGet)
+	s.router.HandleFunc("/ping", handler.HandlerPing).Methods(http.MethodGet)
 
-	// маршрутизация запросов обработчику
-	r.Post("/", handler.HandlerPOST)
-	r.Post("/api/shorten", handler.HandlerJSONPOST)
-	r.Get("/{ID}", handler.HandlerGET)
-
-	return r
+	return s.router
 }
 
 //TODO: refactor to benchmark test (make separate save and get?)
-//go test -bench . -benchmem -memprofile base.pprof
-//go tool pprof -http=":9090" bench.test base.pprof
+//go test -bench . -benchmem -benchtime 10s -memprofile base.pprof
+//go test -bench . -benchmem -benchtime 10s -memprofile result.pprof
+//go tool pprof -http=":9090"  bench.test base.pprof
+//go tool pprof -http=":9095"  bench.test result.pprof
+//go tool pprof base.pprof
+//go tool pprof result.pprof
+//go tool pprof -http=':8081' -diff_base base.pprof result.pprof
+//go tool pprof -top -http=':8081' -diff_base base.pprof result.pprof
+
 func BenchmarkBothHandlersMemoryStorage(b *testing.B) {
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
