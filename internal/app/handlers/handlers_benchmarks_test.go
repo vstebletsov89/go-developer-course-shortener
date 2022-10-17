@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"github.com/go-chi/chi/v5"
-	"github.com/stretchr/testify/assert"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/configs"
@@ -14,7 +13,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strconv"
 	"testing"
 )
@@ -70,8 +68,7 @@ import (
 //Внимание: к концу текущего спринта покрытие вашего кода автотестами должно быть не менее 40%.
 
 func testBenchmarkRequest(b *testing.B, ts *httptest.Server, method, path string, body io.Reader) (*http.Response, string) {
-	req, err := http.NewRequest(method, ts.URL+path, body)
-	assert.NoError(b, err)
+	req, _ := http.NewRequest(method, ts.URL+path, body)
 
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -79,11 +76,11 @@ func testBenchmarkRequest(b *testing.B, ts *httptest.Server, method, path string
 		},
 	}
 
-	resp, err := client.Do(req)
-	assert.NoError(b, err)
+	b.StartTimer() // start timer
+	resp, _ := client.Do(req)
+	b.StopTimer() // stop all timers
 
-	respBody, err := ioutil.ReadAll(resp.Body)
-	assert.NoError(b, err)
+	respBody, _ := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
 	return resp, string(respBody)
@@ -118,104 +115,35 @@ func NewRouterBenchmark(config *configs.Config) chi.Router {
 }
 
 //TODO: refactor to benchmark test (make separate save and get?)
-func BenchmarkBothHandlersFileStorage(b *testing.B) {
-	homeDir, err := os.UserHomeDir()
-	assert.NoError(b, err)
-
-	file, err := os.CreateTemp(homeDir, "test")
-	assert.NoError(b, err)
-	defer os.RemoveAll(file.Name())
-
-	log.Printf("Temporary file name: %s", file.Name())
-
+//go test -bench . -benchmem -memprofile base.pprof
+//go tool pprof -http=":9090" bench.test base.pprof
+func BenchmarkBothHandlersMemoryStorage(b *testing.B) {
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: file.Name(),
+		FileStoragePath: "",
 	}
 	r := NewRouterBenchmark(config)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	b.ResetTimer() // reset all timers
+	b.ResetTimer() // reset timer
 
-	counter := 1
+	counter := 1 // counter for unique urls
 	for i := 0; i < b.N; i++ {
+		b.StopTimer() // stop timer
 		originalURL := "https://github.com/test_repo" + strconv.Itoa(counter)
 
 		// prepare short url
-		b.StartTimer() // start timer
 		resp, body := testBenchmarkRequest(b, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-		b.StopTimer() // stop all timers
 
-		assert.Equal(b, http.StatusCreated, resp.StatusCode)
-		shortURL, err := url.Parse(body)
-		assert.NoError(b, err)
+		shortURL, _ := url.Parse(body)
 		resp.Body.Close()
 
 		// get original url
-		b.StartTimer() // start timer
 		resp, _ = testBenchmarkRequest(b, ts, http.MethodGet, shortURL.Path, nil)
-		b.StopTimer() // stop all timers
 
-		assert.Equal(b, "https://github.com/test_repo"+strconv.Itoa(counter), resp.Header.Get("Location"))
-		assert.Equal(b, http.StatusTemporaryRedirect, resp.StatusCode)
 		resp.Body.Close()
 		counter++
 	}
 }
-
-//TODO: refactor to benchmark test?
-//func TestBothHandlersMemoryStorage(t *testing.T) {
-//	config := &configs.Config{
-//		ServerAddress:   "localhost:8080",
-//		BaseURL:         "http://localhost:8080",
-//		FileStoragePath: "",
-//	}
-//	r := NewRouterBenchmark(config)
-//	ts := httptest.NewServer(r)
-//	defer ts.Close()
-//
-//	//сначала подготавливаем сокращенную ссылку через POST
-//	originalURL := "https://github.com/test_repo1"
-//	resp, body := testBenchmarkRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-//	defer resp.Body.Close()
-//	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-//	shortURL, err := url.Parse(body)
-//	assert.NoError(t, err)
-//
-//	//получаем оригинальную ссылку через GET запрос
-//	resp, _ = testBenchmarkRequest(t, ts, http.MethodGet, shortURL.Path, nil)
-//	defer resp.Body.Close()
-//	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
-//	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
-//}
-//
-////TODO: refactor to benchmark test?
-//func TestBothHandlersWithJSON(t *testing.T) {
-//	config := &configs.Config{
-//		ServerAddress:   "localhost:8080",
-//		BaseURL:         "http://localhost:8080",
-//		FileStoragePath: "",
-//	}
-//	r := NewRouterBenchmark(config)
-//	ts := httptest.NewServer(r)
-//	defer ts.Close()
-//
-//	//сначала подготавливаем сокращенную ссылку через POST /api/shorten
-//	originalURL := "https://github.com/test_repo1"
-//	resp, body := testBenchmarkRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
-//	defer resp.Body.Close()
-//	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-//	var response types.ResponseJSON
-//	err := json.Unmarshal([]byte(body), &response)
-//	assert.NoError(t, err)
-//	shortURL, err := url.Parse(response.Result)
-//	assert.NoError(t, err)
-//
-//	//получаем оригинальную ссылку через GET запрос
-//	resp, _ = testBenchmarkRequest(t, ts, http.MethodGet, shortURL.Path, nil)
-//	defer resp.Body.Close()
-//	assert.Equal(t, originalURL, resp.Header.Get("Location"))
-//	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
-//}
