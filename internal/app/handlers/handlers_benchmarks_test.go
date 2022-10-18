@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"github.com/go-chi/chi/v5"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/configs"
@@ -14,6 +13,8 @@ import (
 	"net/url"
 	"strconv"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 func testBenchmarkRequest(b *testing.B, ts *httptest.Server, method, path string, body io.Reader) (*http.Response, string) {
@@ -52,7 +53,7 @@ func NewRouterBenchmark(config *configs.Config) chi.Router {
 	r := chi.NewRouter()
 	r.Use(AuthHandleMockBenchmark)
 
-	// маршрутизация запросов обработчику
+	// routing
 	r.Post("/", handler.HandlerPOST)
 	r.Post("/api/shorten", handler.HandlerJSONPOST)
 	r.Get("/{ID}", handler.HandlerGET)

@@ -2,9 +2,10 @@ package repository
 
 import (
 	"context"
-	"github.com/jackc/pgx/v4"
 	"go-developer-course-shortener/internal/app/types"
 	"log"
+
+	"github.com/jackc/pgx/v4"
 )
 
 const PostgreSQLTable = `create table if not exists urls (

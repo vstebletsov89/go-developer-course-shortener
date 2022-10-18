@@ -5,11 +5,12 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/hex"
-	"github.com/google/uuid"
 	"go-developer-course-shortener/internal/app/rand"
 	"log"
 	"net/http"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
 type UserContextType string

@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgerrcode"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/rand"
 	"go-developer-course-shortener/internal/app/repository"
@@ -18,6 +15,10 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgconn"
+	"github.com/jackc/pgerrcode"
 )
 
 const (
