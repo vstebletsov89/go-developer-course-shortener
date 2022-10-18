@@ -41,9 +41,9 @@ func (r *FileRepository) GetShortURLByOriginalURL(originalURL string) (string, e
 }
 
 func (r *FileRepository) SaveBatchURLS(userID string, links types.BatchLinks) (types.ResponseBatch, error) {
-	var response types.ResponseBatch
-	for _, v := range links {
-		response = append(response, types.ResponseBatchJSON{CorrelationID: v.CorrelationID, ShortURL: v.ShortURL})
+	response := make(types.ResponseBatch, len(links), len(links)) // allocate required capacity for the links
+	for i, v := range links {
+		response[i] = types.ResponseBatchJSON{CorrelationID: v.CorrelationID, ShortURL: v.ShortURL}
 	}
 	return response, nil
 }

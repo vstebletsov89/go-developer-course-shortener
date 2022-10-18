@@ -53,14 +53,13 @@ func (r *DBRepository) SaveBatchURLS(userID string, links types.BatchLinks) (typ
 
 	sql := `INSERT INTO urls (user_id, short_url, original_url) VALUES ($1, $2, $3)`
 
-	var response types.ResponseBatch
-
-	for _, v := range links {
+	response := make(types.ResponseBatch, len(links), len(links)) // allocate required capacity for the links
+	for i, v := range links {
 		_, err := tx.Exec(ctx, sql, userID, v.ShortURL, v.OriginalURL)
 		if err != nil {
 			return nil, err
 		}
-		response = append(response, types.ResponseBatchJSON{CorrelationID: v.CorrelationID, ShortURL: v.ShortURL})
+		response[i] = types.ResponseBatchJSON{CorrelationID: v.CorrelationID, ShortURL: v.ShortURL}
 	}
 
 	err = tx.Commit(ctx)
