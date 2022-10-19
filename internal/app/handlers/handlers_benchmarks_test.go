@@ -62,25 +62,6 @@ func NewRouterBenchmark(config *configs.Config) chi.Router {
 	return r
 }
 
-//go test -bench . -benchmem -benchtime 10s -memprofile base.pprof   (used this command to gather stats)
-
-// found suspicious place:
-//go-developer-course-shortener/internal/app/repository.(*InMemoryRepository).GetUserStorage
-//C:\Users\vs891026\IdeaProjects\go-developer-course-shortener\internal\app\repository\inmemory.go
-//
-//Total:     70.43MB    70.43MB (flat, cum) 22.76%
-//52            .          .           	for _, v := range ids {
-//53            .          .           		URL, ok := r.inMemoryMap[v]
-//54            .          .           		if !ok {
-//55            .          .           			return links, errors.New("ID not found")
-//56            .          .           		}
-//57      70.43MB    70.43MB           		links = append(links, types.Link{ShortURL: v, OriginalURL: URL})
-
-//go test -bench . -benchmem -benchtime 10s -memprofile result.pprof (used this command to compare results)
-//go tool pprof -http=":9090"  bench.test base.pprof
-//go tool pprof -http=":9095"  bench.test result.pprof
-//go tool pprof -http=":8081" -diff_base base.pprof result.pprof
-
 func BenchmarkSaveGetMemoryStorage(b *testing.B) {
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",

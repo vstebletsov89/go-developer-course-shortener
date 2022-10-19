@@ -1,6 +1,6 @@
 module go-developer-course-shortener
 
-go 1.17
+go 1.19
 
 require (
 	github.com/caarlos0/env/v6 v6.9.1
