@@ -60,7 +60,7 @@ func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
 
 	userID := extractUserID(r)
 
-	batchLinks := make(types.BatchLinks, len(request), len(request)) // allocate required capacity for the links
+	batchLinks := make(types.BatchLinks, len(request)) // allocate required capacity for the links
 	for i, v := range request {
 		id := string(rand.GenerateRandom(shortLinkLength))
 		shortURL := makeShortURL(h.config.BaseURL, id)
@@ -228,7 +228,7 @@ func (h *Handler) HandlerUseStorageDELETE(job chan worker.Job) http.HandlerFunc 
 		}
 		log.Printf("Request deleteURLS: %+v", deleteURLS)
 
-		shortURLS := make([]string, len(deleteURLS), len(deleteURLS)) // allocate required capacity for the links
+		shortURLS := make([]string, len(deleteURLS)) // allocate required capacity for the links
 		for i, id := range deleteURLS {
 			shortURLS[i] = makeShortURL(h.config.BaseURL, id)
 		}

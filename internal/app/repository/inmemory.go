@@ -28,7 +28,7 @@ func (r *InMemoryRepository) DeleteURLS(ctx context.Context, userID string, shor
 }
 
 func (r *InMemoryRepository) SaveBatchURLS(userID string, links types.BatchLinks) (types.ResponseBatch, error) {
-	response := make(types.ResponseBatch, len(links), len(links)) // allocate required capacity for the links
+	response := make(types.ResponseBatch, len(links)) // allocate required capacity for the links
 	for i, v := range links {
 		response[i] = types.ResponseBatchJSON{CorrelationID: v.CorrelationID, ShortURL: v.ShortURL}
 	}
@@ -49,7 +49,7 @@ func (r *InMemoryRepository) GetUserStorage(userID string) ([]types.Link, error)
 		return nil, errors.New("UserID not found")
 	}
 
-	links := make([]types.Link, len(ids), len(ids)) // allocate required capacity for the links
+	links := make([]types.Link, len(ids)) // allocate required capacity for the links
 	for i, v := range ids {
 		URL, ok := r.inMemoryMap[v]
 		if !ok {
