@@ -1,3 +1,4 @@
+// Package rand provides primitives for random.
 package rand
 
 import (
@@ -9,7 +10,8 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// GenerateRandom is used in two places: middleware and handlers
+// GenerateRandom generates slice of random bytes with specified size.
+// It is used in two places: middleware and handlers.
 func GenerateRandom(size int) []byte {
 	var Letters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456789")
 	b := make([]byte, size)

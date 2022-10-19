@@ -105,6 +105,7 @@ func (r *FileRepository) Ping() bool {
 	return true
 }
 
+// NewFileRepository returns a new FileRepository.
 func NewFileRepository(fileStoragePath string) *FileRepository {
 	log.Print("File storage is used")
 	return &FileRepository{fileStoragePath: fileStoragePath}

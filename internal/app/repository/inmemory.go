@@ -65,6 +65,7 @@ func (r *InMemoryRepository) Ping() bool {
 	return true
 }
 
+// NewInMemoryRepository returns a new InMemoryRepository.
 func NewInMemoryRepository() *InMemoryRepository {
 	log.Print("Memory storage is used")
 	return &InMemoryRepository{inMemoryMap: make(map[string]string), inMemoryUserStorage: make(map[string][]string)}

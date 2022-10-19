@@ -1,3 +1,4 @@
+// Package configs provides primitives for settings of service.
 package configs
 
 import (
@@ -7,6 +8,7 @@ import (
 	"github.com/caarlos0/env/v6"
 )
 
+// Config contains global settings of service.
 type Config struct {
 	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"localhost:8080"`
 	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080"`
@@ -22,6 +24,7 @@ func (c *Config) readCommandLineArgs() {
 	flag.Parse()
 }
 
+// ReadConfig merges settings from environment and command line arguments.
 func ReadConfig() (*Config, error) {
 	var cfg Config
 	err := env.Parse(&cfg)

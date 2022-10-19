@@ -120,6 +120,7 @@ func (r *DBRepository) Ping() bool {
 	return err == nil
 }
 
+// NewDBRepository returns a new DBRepository.
 func NewDBRepository(connection *pgx.Conn) (*DBRepository, error) {
 	log.Print("DB storage is used")
 	_, err := connection.Exec(context.Background(), PostgreSQLTable)
