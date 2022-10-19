@@ -44,7 +44,6 @@ func (r *InMemoryRepository) GetURL(shortURL string) (types.OriginalLink, error)
 }
 
 func (r *InMemoryRepository) GetUserStorage(userID string) ([]types.Link, error) {
-	//var links []types.Link
 	ids, ok := r.inMemoryUserStorage[userID]
 	if !ok {
 		return nil, errors.New("UserID not found")

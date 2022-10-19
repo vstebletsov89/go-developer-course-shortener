@@ -249,13 +249,10 @@ func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) 
 	log.Printf("Get all links for userID: %s", userID)
 	links, err := h.storage.GetUserStorage(userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if len(links) == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+
 	body, err := json.Marshal(links)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

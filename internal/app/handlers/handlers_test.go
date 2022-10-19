@@ -73,6 +73,23 @@ func NewRouter(config *configs.Config) chi.Router {
 	return r
 }
 
+func TestHandlerUserStorageGETNoUrls(t *testing.T) {
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: "",
+	}
+	r := NewRouter(config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// get original url
+	resp, _ := testRequest(t, ts, http.MethodGet, "/api/user/urls", nil)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+}
+
 func TestHandlerPing(t *testing.T) {
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
