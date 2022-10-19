@@ -1,4 +1,3 @@
-// Package types contains set of structures for requests and response.
 package types
 
 // Link represents a pair of short and original urls.

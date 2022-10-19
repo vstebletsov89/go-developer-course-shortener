@@ -1,4 +1,3 @@
-// Package middleware provides primitives for authorization and compress services.
 package middleware
 
 import (
