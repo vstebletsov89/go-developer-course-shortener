@@ -10,7 +10,6 @@ import (
 	"go-developer-course-shortener/internal/app/types"
 	"go-developer-course-shortener/internal/configs"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -36,7 +35,7 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
 
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	assert.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -122,7 +121,7 @@ func TestGetUserLinksMemoryStorage(t *testing.T) {
 		// prepare short url
 		originalURL := "https://github.com/test_repo" + strconv.Itoa(i)
 		resp, _ := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-		defer resp.Body.Close()
+		resp.Body.Close()
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	}
 
@@ -343,7 +342,7 @@ func TestHandlerGetErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, body := testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", tt.id), nil)
-			defer resp.Body.Close()
+			resp.Body.Close()
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 			assert.Equal(t, tt.want.responseBody, body)
 			assert.Equal(t, tt.want.headerLocation, resp.Header.Get("Location"))
@@ -393,7 +392,7 @@ func TestHandlerPost(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(tt.longURL))
-			defer resp.Body.Close()
+			resp.Body.Close()
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 			assert.Equal(t, tt.want.responseBody, body)
 			assert.Equal(t, tt.want.contentType, resp.Header.Get(ContentType))
@@ -456,7 +455,7 @@ func TestHandlerJsonPost(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, body := testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(tt.jsonBody))
-			defer resp.Body.Close()
+			resp.Body.Close()
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 
 			if tt.want.checkJSON {

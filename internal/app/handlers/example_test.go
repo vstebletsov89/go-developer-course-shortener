@@ -8,18 +8,21 @@ import (
 	"go-developer-course-shortener/internal/app/types"
 	"go-developer-course-shortener/internal/configs"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/go-chi/chi/v5"
 )
 
-func testExampleRequest(ts *httptest.Server, method, path string, body io.Reader) (*http.Response, string) {
-	req, _ := http.NewRequest(method, ts.URL+path, body)
+func exampleRequest(t *testing.T, ts *httptest.Server, method, path string, body io.Reader) (*http.Response, string) {
+	req, err := http.NewRequest(method, ts.URL+path, body)
+	assert.NoError(t, err)
 
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -27,9 +30,11 @@ func testExampleRequest(ts *httptest.Server, method, path string, body io.Reader
 		},
 	}
 
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
 
-	respBody, _ := ioutil.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	assert.NoError(t, err)
 	defer resp.Body.Close()
 
 	return resp, string(respBody)
@@ -70,7 +75,7 @@ func ExampleHandler_HandlerPing() {
 	defer ts.Close()
 
 	// try to ping connection
-	resp, _ := testExampleRequest(ts, http.MethodGet, "/ping", nil)
+	resp, _ := exampleRequest(nil, ts, http.MethodGet, "/ping", nil)
 	defer resp.Body.Close()
 
 	fmt.Println(resp.StatusCode)
@@ -93,12 +98,12 @@ func ExampleHandler_HandlerUserStorageGET() {
 	for i := 0; i < counter; i++ {
 		// prepare short url
 		originalURL := "https://github.com/test_repo" + strconv.Itoa(i)
-		resp, _ := testExampleRequest(ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-		defer resp.Body.Close()
+		resp, _ := exampleRequest(nil, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
+		resp.Body.Close()
 	}
 
 	// get original urls
-	resp, body := testExampleRequest(ts, http.MethodGet, "/api/user/urls", nil)
+	resp, body := exampleRequest(nil, ts, http.MethodGet, "/api/user/urls", nil)
 	defer resp.Body.Close()
 
 	var response []types.Link
@@ -122,7 +127,7 @@ func ExampleHandler_HandlerPOST() {
 
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
-	resp, _ := testExampleRequest(ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
+	resp, _ := exampleRequest(nil, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
 	defer resp.Body.Close()
 
 	fmt.Println(resp.StatusCode)
@@ -143,12 +148,12 @@ func ExampleHandler_HandlerGET() {
 
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
-	resp, body := testExampleRequest(ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
+	resp, body := exampleRequest(nil, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
 	defer resp.Body.Close()
 	shortURL, _ := url.Parse(body)
 
 	// get original url
-	resp, _ = testExampleRequest(ts, http.MethodGet, shortURL.Path, nil)
+	resp, _ = exampleRequest(nil, ts, http.MethodGet, shortURL.Path, nil)
 	defer resp.Body.Close()
 
 	fmt.Println(resp.Header.Get("Location"))
@@ -168,7 +173,7 @@ func ExampleHandler_HandlerJSONPOST() {
 	defer ts.Close()
 
 	// prepare short url from json
-	resp, body := testExampleRequest(ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
+	resp, body := exampleRequest(nil, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
 	defer resp.Body.Close()
 
 	var response types.ResponseJSON
@@ -191,7 +196,7 @@ func ExampleHandler_HandlerBatchPOST() {
 	defer ts.Close()
 
 	// prepare short url from json
-	resp, body := testExampleRequest(ts, http.MethodPost, "/api/shorten/batch",
+	resp, body := exampleRequest(nil, ts, http.MethodPost, "/api/shorten/batch",
 		bytes.NewBufferString(`[{"url": "https://github.com/test_repo1"},{"url": "https://github.com/test_repo2"},{"url": "https://github.com/test_repo3"}]`))
 	defer resp.Body.Close()
 
