@@ -89,7 +89,7 @@ func TestHandlerUserStorageGETNoUrls(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 }
 
-func TestHandlerPing(t *testing.T) {
+func TestHandlerPingMemoryStorage(t *testing.T) {
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
@@ -104,6 +104,32 @@ func TestHandlerPing(t *testing.T) {
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
+}
+
+func TestHandlerPingFileStorage(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	assert.NoError(t, err)
+
+	file, err := os.CreateTemp(homeDir, "test")
+	assert.NoError(t, err)
+
+	defer os.RemoveAll(file.Name())
+
+	log.Printf("Temporary file name: %s", file.Name())
+
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: file.Name(),
+	}
+	r := NewRouter(config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// try to ping connection
+	resp, _ := testRequest(t, ts, http.MethodGet, "/ping", nil)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func TestGetUserLinksMemoryStorage(t *testing.T) {
