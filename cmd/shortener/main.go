@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v4"
 	"go-developer-course-shortener/internal/app/handlers"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
@@ -11,7 +9,11 @@ import (
 	"go-developer-course-shortener/internal/worker"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v4"
 )
 
 func main() {

@@ -1,3 +1,4 @@
+// Package handlers is a collection of handlers for the shortener service.
 package handlers
 
 import (
@@ -5,9 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgerrcode"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/rand"
 	"go-developer-course-shortener/internal/app/repository"
@@ -18,6 +16,10 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgconn"
+	"github.com/jackc/pgerrcode"
 )
 
 const (
@@ -27,11 +29,13 @@ const (
 	shortLinkLength       = 5
 )
 
+// Handler contains settings and storage for current Repository.
 type Handler struct {
 	config  *configs.Config
 	storage repository.Repository
 }
 
+// NewHTTPHandler returns a new Handler for the Repository.
 func NewHTTPHandler(cfg *configs.Config, s repository.Repository) *Handler {
 	return &Handler{config: cfg, storage: s}
 }
@@ -45,6 +49,7 @@ func extractUserID(r *http.Request) string {
 	return ""
 }
 
+// HandlerBatchPOST implements saving list of urls to the repository.
 func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
 	var request types.RequestBatch
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -55,11 +60,11 @@ func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
 
 	userID := extractUserID(r)
 
-	var batchLinks types.BatchLinks
-	for _, v := range request {
+	batchLinks := make(types.BatchLinks, len(request)) // allocate required capacity for the links
+	for i, v := range request {
 		id := string(rand.GenerateRandom(shortLinkLength))
-		shortURL := MakeShortURL(h.config.BaseURL, id)
-		batchLinks = append(batchLinks, types.BatchLink{CorrelationID: v.CorrelationID, ShortURL: shortURL, OriginalURL: v.OriginalURL})
+		shortURL := makeShortURL(h.config.BaseURL, id)
+		batchLinks[i] = types.BatchLink{CorrelationID: v.CorrelationID, ShortURL: shortURL, OriginalURL: v.OriginalURL}
 	}
 
 	var response types.ResponseBatch
@@ -90,6 +95,7 @@ func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandlerJSONPOST implements getting short url by original url for json request.
 func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	var request types.RequestJSON
 
@@ -104,7 +110,7 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Request JSON: %+v", request)
 
 	log.Printf("Long URL: %v", request.URL)
-	longURL, err := ParseURL(request.URL)
+	longURL, err := parseURL(request.URL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -113,7 +119,7 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	userID := extractUserID(r)
 
 	id := string(rand.GenerateRandom(shortLinkLength))
-	shortURL := MakeShortURL(h.config.BaseURL, id)
+	shortURL := makeShortURL(h.config.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
 
 	err = h.storage.SaveURL(userID, shortURL, longURL)
@@ -164,6 +170,7 @@ func checkDBViolation(err error) (int, error) {
 	return http.StatusCreated, nil
 }
 
+// HandlerPOST implements saving short and original url to the repository.
 func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -172,7 +179,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Long URL: %v", string(body))
-	longURL, err := ParseURL(string(body))
+	longURL, err := parseURL(string(body))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -181,7 +188,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	userID := extractUserID(r)
 
 	id := string(rand.GenerateRandom(shortLinkLength))
-	shortURL := MakeShortURL(h.config.BaseURL, id)
+	shortURL := makeShortURL(h.config.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
 
 	err = h.storage.SaveURL(userID, shortURL, longURL)
@@ -208,6 +215,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandlerUseStorageDELETE implements deleting short urls for current user id.
 func (h *Handler) HandlerUseStorageDELETE(job chan worker.Job) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := extractUserID(r)
@@ -220,9 +228,9 @@ func (h *Handler) HandlerUseStorageDELETE(job chan worker.Job) http.HandlerFunc 
 		}
 		log.Printf("Request deleteURLS: %+v", deleteURLS)
 
-		var shortURLS []string
-		for _, id := range deleteURLS {
-			shortURLS = append(shortURLS, MakeShortURL(h.config.BaseURL, id))
+		shortURLS := make([]string, len(deleteURLS)) // allocate required capacity for the links
+		for i, id := range deleteURLS {
+			shortURLS[i] = makeShortURL(h.config.BaseURL, id)
 		}
 		log.Printf("Request shortURLS: %+v", shortURLS)
 
@@ -235,18 +243,16 @@ func (h *Handler) HandlerUseStorageDELETE(job chan worker.Job) http.HandlerFunc 
 	}
 }
 
+// HandlerUserStorageGET implements getting list of urls for current user id.
 func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) {
 	userID := extractUserID(r)
 	log.Printf("Get all links for userID: %s", userID)
 	links, err := h.storage.GetUserStorage(userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if len(links) == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+
 	body, err := json.Marshal(links)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -261,11 +267,12 @@ func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// HandlerGET implements getting original url by short url.
 func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	strID := chi.URLParam(r, "ID")
 	log.Printf("strID: `%s`", strID)
 
-	originalLink, err := h.storage.GetURL(MakeShortURL(h.config.BaseURL, strID))
+	originalLink, err := h.storage.GetURL(makeShortURL(h.config.BaseURL, strID))
 	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)
 		return
@@ -281,6 +288,7 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandlerPing verifies current status of repository.
 func (h *Handler) HandlerPing(w http.ResponseWriter, r *http.Request) {
 	if !h.storage.Ping() {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -289,12 +297,12 @@ func (h *Handler) HandlerPing(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func MakeShortURL(baseURL string, id string) string {
+func makeShortURL(baseURL string, id string) string {
 	shortURL := fmt.Sprintf("%v/%s", baseURL, id)
 	return shortURL
 }
 
-func ParseURL(strURL string) (string, error) {
+func parseURL(strURL string) (string, error) {
 	longURL, err := url.Parse(strURL)
 	if err != nil {
 		return "", err

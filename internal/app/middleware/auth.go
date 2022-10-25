@@ -1,3 +1,4 @@
+// Package middleware provides primitives for authorization and compress services.
 package middleware
 
 import (
@@ -5,18 +6,22 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/hex"
-	"github.com/google/uuid"
 	"go-developer-course-shortener/internal/app/rand"
 	"log"
 	"net/http"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
+// UserContextType user context type.
 type UserContextType string
 
 const (
-	AccessToken                 = "uniqueAuthToken"
-	UserCtx     UserContextType = "UserCtx"
+	// AccessToken defines cookie name for current user.
+	AccessToken = "uniqueAuthToken"
+	// UserCtx defines user context name.
+	UserCtx UserContextType = "UserCtx"
 )
 
 type cipherData struct {
@@ -72,6 +77,8 @@ func decrypt(token string) (string, error) {
 	return string(userID), nil
 }
 
+// AuthHandle implements authorization handler.
+// This handler is used as a middleware for all server requests.
 func AuthHandle(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userID := uuid.NewString()

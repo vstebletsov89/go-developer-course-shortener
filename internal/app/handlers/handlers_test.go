@@ -5,20 +5,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/go-chi/chi/v5"
-	"github.com/stretchr/testify/assert"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/types"
 	"go-developer-course-shortener/internal/configs"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strconv"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/assert"
 )
 
 func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io.Reader) (*http.Response, string) {
@@ -34,7 +35,7 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
 
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	assert.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -61,12 +62,109 @@ func NewRouter(config *configs.Config) chi.Router {
 	r := chi.NewRouter()
 	r.Use(AuthHandleMock)
 
-	// маршрутизация запросов обработчику
+	// routing
 	r.Post("/", handler.HandlerPOST)
 	r.Post("/api/shorten", handler.HandlerJSONPOST)
 	r.Get("/{ID}", handler.HandlerGET)
+	r.Get("/ping", handler.HandlerPing)
+	r.Get("/api/user/urls", handler.HandlerUserStorageGET)
 
 	return r
+}
+
+func TestHandlerUserStorageGETNoUrls(t *testing.T) {
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: "",
+	}
+	r := NewRouter(config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// get original url
+	resp, _ := testRequest(t, ts, http.MethodGet, "/api/user/urls", nil)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+}
+
+func TestHandlerPingMemoryStorage(t *testing.T) {
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: "",
+	}
+	r := NewRouter(config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// try to ping connection
+	resp, _ := testRequest(t, ts, http.MethodGet, "/ping", nil)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+}
+
+func TestHandlerPingFileStorage(t *testing.T) {
+	homeDir, err := os.UserHomeDir()
+	assert.NoError(t, err)
+
+	file, err := os.CreateTemp(homeDir, "test")
+	assert.NoError(t, err)
+
+	defer os.RemoveAll(file.Name())
+
+	log.Printf("Temporary file name: %s", file.Name())
+
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: file.Name(),
+	}
+	r := NewRouter(config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// try to ping connection
+	resp, _ := testRequest(t, ts, http.MethodGet, "/ping", nil)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestGetUserLinksMemoryStorage(t *testing.T) {
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: "",
+	}
+	r := NewRouter(config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	counter := 10
+	for i := 0; i < counter; i++ {
+		// prepare short url
+		originalURL := "https://github.com/test_repo" + strconv.Itoa(i)
+		resp, _ := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
+		resp.Body.Close()
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	}
+
+	// get original urls
+	resp, body := testRequest(t, ts, http.MethodGet, "/api/user/urls", nil)
+	defer resp.Body.Close()
+
+	var response []types.Link
+	err := json.Unmarshal([]byte(body), &response)
+	assert.NoError(t, err)
+
+	for i, v := range response {
+		originalURL := "https://github.com/test_repo" + strconv.Itoa(i)
+		assert.Equal(t, originalURL, v.OriginalURL)
+	}
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
 func TestBothHandlersFileStorageInvalidRecord(t *testing.T) {
@@ -89,13 +187,13 @@ func TestBothHandlersFileStorageInvalidRecord(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	//сначала подготавливаем сокращенную ссылку через POST
+	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, _ := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	//получаем оригинальную ссылку через GET запрос
+	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, "/AAAAA", nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "", resp.Header.Get("Location"))
@@ -121,7 +219,7 @@ func TestBothHandlersFileStorageOneRecord(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	//сначала подготавливаем сокращенную ссылку через POST
+	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
 	defer resp.Body.Close()
@@ -129,7 +227,7 @@ func TestBothHandlersFileStorageOneRecord(t *testing.T) {
 	shortURL, err := url.Parse(body)
 	assert.NoError(t, err)
 
-	//получаем оригинальную ссылку через GET запрос
+	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
@@ -155,7 +253,7 @@ func TestBothHandlersFileStorageTwoRecords(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	//сначала подготавливаем сокращенную ссылку через POST
+	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
 	defer resp.Body.Close()
@@ -163,20 +261,20 @@ func TestBothHandlersFileStorageTwoRecords(t *testing.T) {
 	shortURL1, err := url.Parse(body)
 	assert.NoError(t, err)
 
-	//сначала подготавливаем сокращенную ссылку через POST
+	// prepare short url
 	resp, body = testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo2"))
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	shortURL2, err := url.Parse(body)
 	assert.NoError(t, err)
 
-	//получаем оригинальную ссылку через GET запрос
+	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, shortURL2.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo2", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 
-	//получаем оригинальную ссылку через GET запрос
+	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, shortURL1.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
@@ -193,7 +291,7 @@ func TestBothHandlersMemoryStorage(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	//сначала подготавливаем сокращенную ссылку через POST
+	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
 	defer resp.Body.Close()
@@ -201,7 +299,7 @@ func TestBothHandlersMemoryStorage(t *testing.T) {
 	shortURL, err := url.Parse(body)
 	assert.NoError(t, err)
 
-	//получаем оригинальную ссылку через GET запрос
+	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
@@ -218,7 +316,7 @@ func TestBothHandlersWithJSON(t *testing.T) {
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
-	//сначала подготавливаем сокращенную ссылку через POST /api/shorten
+	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
 	defer resp.Body.Close()
@@ -229,7 +327,7 @@ func TestBothHandlersWithJSON(t *testing.T) {
 	shortURL, err := url.Parse(response.Result)
 	assert.NoError(t, err)
 
-	//получаем оригинальную ссылку через GET запрос
+	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
 	defer resp.Body.Close()
 	assert.Equal(t, originalURL, resp.Header.Get("Location"))
@@ -270,7 +368,7 @@ func TestHandlerGetErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, body := testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", tt.id), nil)
-			defer resp.Body.Close()
+			resp.Body.Close()
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 			assert.Equal(t, tt.want.responseBody, body)
 			assert.Equal(t, tt.want.headerLocation, resp.Header.Get("Location"))
@@ -320,7 +418,7 @@ func TestHandlerPost(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(tt.longURL))
-			defer resp.Body.Close()
+			resp.Body.Close()
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 			assert.Equal(t, tt.want.responseBody, body)
 			assert.Equal(t, tt.want.contentType, resp.Header.Get(ContentType))
@@ -383,7 +481,7 @@ func TestHandlerJsonPost(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, body := testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(tt.jsonBody))
-			defer resp.Body.Close()
+			resp.Body.Close()
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 
 			if tt.want.checkJSON {

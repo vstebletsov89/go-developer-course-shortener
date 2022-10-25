@@ -2,9 +2,10 @@ package repository
 
 import (
 	"context"
-	"github.com/jackc/pgx/v4"
 	"go-developer-course-shortener/internal/app/types"
 	"log"
+
+	"github.com/jackc/pgx/v4"
 )
 
 const PostgreSQLTable = `create table if not exists urls (
@@ -53,14 +54,13 @@ func (r *DBRepository) SaveBatchURLS(userID string, links types.BatchLinks) (typ
 
 	sql := `INSERT INTO urls (user_id, short_url, original_url) VALUES ($1, $2, $3)`
 
-	var response types.ResponseBatch
-
-	for _, v := range links {
+	response := make(types.ResponseBatch, len(links)) // allocate required capacity for the links
+	for i, v := range links {
 		_, err := tx.Exec(ctx, sql, userID, v.ShortURL, v.OriginalURL)
 		if err != nil {
 			return nil, err
 		}
-		response = append(response, types.ResponseBatchJSON{CorrelationID: v.CorrelationID, ShortURL: v.ShortURL})
+		response[i] = types.ResponseBatchJSON{CorrelationID: v.CorrelationID, ShortURL: v.ShortURL}
 	}
 
 	err = tx.Commit(ctx)
@@ -120,6 +120,7 @@ func (r *DBRepository) Ping() bool {
 	return err == nil
 }
 
+// NewDBRepository returns a new DBRepository.
 func NewDBRepository(connection *pgx.Conn) (*DBRepository, error) {
 	log.Print("DB storage is used")
 	_, err := connection.Exec(context.Background(), PostgreSQLTable)
