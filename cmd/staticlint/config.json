@@ -1,0 +1,7 @@
+{
+  "staticcheck": [
+    "SA",
+    "S",
+    "QF"
+  ]
+}
