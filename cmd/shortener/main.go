@@ -20,26 +20,28 @@ func main() {
 	log.SetOutput(os.Stdout)
 	config, err := configs.ReadConfig()
 	if err != nil {
-		log.Fatal("Failed to read server configuration")
+		log.Panicln("Failed to read server configuration")
 	}
 
 	var storage repository.Repository
-	if config.DatabaseDsn != "" {
+	switch {
+	case config.DatabaseDsn != "":
 		conn, err := pgx.Connect(context.Background(), config.DatabaseDsn)
 		if err != nil {
-			log.Fatal("Failed to connect to database")
+			log.Panicln("Failed to connect to database")
 		}
 		defer conn.Close(context.Background())
 
 		storage, err = repository.NewDBRepository(conn)
 		if err != nil {
-			log.Fatal("Failed to create DB repository")
+			log.Panicln("Failed to create DB repository")
 		}
-	} else if config.FileStoragePath != "" {
+	case config.FileStoragePath != "":
 		storage = repository.NewFileRepository(config.FileStoragePath)
-	} else {
+	default:
 		storage = repository.NewInMemoryRepository()
 	}
+
 	handler := handlers.NewHTTPHandler(config, storage)
 
 	// setup worker pool to handle delete requests
@@ -60,5 +62,5 @@ func main() {
 	r.Get("/ping", handler.HandlerPing)
 	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(jobs))
 
-	log.Fatal(http.ListenAndServe(config.ServerAddress, r))
+	log.Panicln(http.ListenAndServe(config.ServerAddress, r))
 }

@@ -1,0 +1,11 @@
+{
+  "staticcheck": [
+    "SA"
+  ],
+  "simple" : [
+    "S"
+  ],
+  "stylecheck" : [
+    "ST"
+  ]
+}
