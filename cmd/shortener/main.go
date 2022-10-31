@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"go-developer-course-shortener/internal/app/handlers"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
@@ -16,7 +17,17 @@ import (
 	"github.com/jackc/pgx/v4"
 )
 
+var (
+	BuildVersion = "N/A"
+	BuildDate    = "N/A"
+	BuildCommit  = "N/A"
+)
+
 func main() {
+	fmt.Printf("Build version: %s\n", BuildVersion)
+	fmt.Printf("Build date: %s\n", BuildDate)
+	fmt.Printf("Build commit: %s\n", BuildCommit)
+
 	log.SetOutput(os.Stdout)
 	config, err := configs.ReadConfig()
 	if err != nil {
