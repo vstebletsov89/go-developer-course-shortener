@@ -56,7 +56,7 @@ func (r *DBRepository) SaveBatchURLS(userID string, links types.BatchLinks) (typ
 
 	response := make(types.ResponseBatch, len(links)) // allocate required capacity for the links
 	for i, v := range links {
-		_, err := tx.Exec(ctx, sql, userID, v.ShortURL, v.OriginalURL)
+		_, err = tx.Exec(ctx, sql, userID, v.ShortURL, v.OriginalURL)
 		if err != nil {
 			return nil, err
 		}

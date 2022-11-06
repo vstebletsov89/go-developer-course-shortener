@@ -49,7 +49,7 @@ func AuthHandleMock(next http.Handler) http.Handler {
 	})
 }
 
-func NewRouter(config *configs.Config) chi.Router {
+func NewRouter(config *configs.Config, auth ...bool) chi.Router {
 	var storage repository.Repository
 	if config.FileStoragePath != "" {
 		storage = repository.NewFileRepository(config.FileStoragePath)
@@ -60,7 +60,11 @@ func NewRouter(config *configs.Config) chi.Router {
 
 	log.Printf("Server started on %v", config.ServerAddress)
 	r := chi.NewRouter()
-	r.Use(AuthHandleMock)
+	if len(auth) > 0 {
+		r.Use(middleware.GzipHandle, middleware.AuthHandle)
+	} else {
+		r.Use(AuthHandleMock)
+	}
 
 	// routing
 	r.Post("/", handler.HandlerPOST)
@@ -70,6 +74,31 @@ func NewRouter(config *configs.Config) chi.Router {
 	r.Get("/api/user/urls", handler.HandlerUserStorageGET)
 
 	return r
+}
+
+func TestMiddlewareHandlersMemoryStorage(t *testing.T) {
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: "",
+	}
+	r := NewRouter(config, true)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// prepare short url
+	originalURL := "https://github.com/test_repo1"
+	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	shortURL, err := url.Parse(body)
+	assert.NoError(t, err)
+
+	// get original url
+	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
+	defer resp.Body.Close()
+	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
+	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 }
 
 func TestHandlerUserStorageGETNoUrls(t *testing.T) {
