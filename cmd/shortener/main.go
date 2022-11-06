@@ -31,7 +31,7 @@ func main() {
 	log.SetOutput(os.Stdout)
 	config, err := configs.ReadConfig()
 	if err != nil {
-		log.Panicln("Failed to read server configuration")
+		log.Panicln("Failed to read server configuration. Error: " + err.Error())
 	}
 
 	var storage repository.Repository
@@ -39,13 +39,13 @@ func main() {
 	case config.DatabaseDsn != "":
 		conn, err := pgx.Connect(context.Background(), config.DatabaseDsn)
 		if err != nil {
-			log.Panicln("Failed to connect to database")
+			log.Panicln("Failed to connect to database. Error: " + err.Error())
 		}
 		defer conn.Close(context.Background())
 
 		storage, err = repository.NewDBRepository(conn)
 		if err != nil {
-			log.Panicln("Failed to create DB repository")
+			log.Panicln("Failed to create DB repository. Error: " + err.Error())
 		}
 	case config.FileStoragePath != "":
 		storage = repository.NewFileRepository(config.FileStoragePath)
