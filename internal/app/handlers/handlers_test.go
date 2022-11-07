@@ -9,6 +9,7 @@ import (
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/types"
 	"go-developer-course-shortener/internal/configs"
+	"go-developer-course-shortener/internal/worker"
 	"io"
 	"log"
 	"net/http"
@@ -66,12 +67,18 @@ func NewRouter(config *configs.Config, auth ...bool) chi.Router {
 		r.Use(AuthHandleMock)
 	}
 
+	// setup worker pool to handle delete requests
+	jobs := make(chan worker.Job, worker.MaxWorkerPoolSize)
+	workerPool := worker.NewWorkerPool(storage, jobs)
+	go workerPool.Run(context.Background())
+
 	// routing
 	r.Post("/", handler.HandlerPOST)
 	r.Post("/api/shorten", handler.HandlerJSONPOST)
 	r.Get("/{ID}", handler.HandlerGET)
 	r.Get("/ping", handler.HandlerPing)
 	r.Get("/api/user/urls", handler.HandlerUserStorageGET)
+	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(jobs))
 
 	return r
 }
@@ -116,6 +123,52 @@ func TestHandlerUserStorageGETNoUrls(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+}
+
+func TestHandlerUseStorageDELETENoUrls(t *testing.T) {
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: "",
+	}
+	r := NewRouter(config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	resp, _ := testRequest(t, ts, http.MethodDelete, "/api/user/urls", nil)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+}
+
+func TestHandlerUseStorageDELETE(t *testing.T) {
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: "",
+	}
+	r := NewRouter(config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// prepare short url
+	originalURL := "https://github.com/test_repo1"
+	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	shortURL, err := url.Parse(body)
+	assert.NoError(t, err)
+
+	var deleteURLS []string
+	deleteURLS = append(deleteURLS, shortURL.Path)
+
+	j, _ := json.Marshal(deleteURLS)
+
+	// delete user urls
+	resp, _ = testRequest(t, ts, http.MethodDelete, "/api/user/urls", bytes.NewBufferString(string(j)))
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 }
 
 func TestHandlerPingMemoryStorage(t *testing.T) {
