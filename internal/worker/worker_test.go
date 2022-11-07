@@ -37,14 +37,14 @@ func TestPoolRun(t *testing.T) {
 		timeout bool
 	}{
 		{
-			name:    "test workerPool.Run without timeout",
-			repo:    repository.NewInMemoryRepository(),
-			timeout: false,
-		},
-		{
 			name:    "test workerPool.Run with timeout",
 			repo:    repository.NewInMemoryRepository(),
 			timeout: true,
+		},
+		{
+			name:    "test workerPool.Run without timeout",
+			repo:    repository.NewInMemoryRepository(),
+			timeout: false,
 		},
 	}
 	for _, tt := range tests {
