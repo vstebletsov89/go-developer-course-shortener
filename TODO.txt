@@ -1,0 +1,152 @@
+Задание для трека «Сервис сокращения URL»
+Добавьте в свой код возможность включения HTTPS в веб-сервере.
+
+При передаче флага -s или переменной окружения ENABLE_HTTPS запускайте сервер с
+ помощью метода http.ListenAndServeTLS или tls.Listen.
+---------------------------------------------------------------------------------------------
+
+Рассмотрим пример создания TLS-сертификата и приватного ключа,
+ которые можно впоследствии использовать для включения режима HTTPS
+ в веб-сервере или при двустороннем шифровании между сервисами.
+
+ Базовую концепцию асимметричного шифрования можно описать следующим образом.
+ Представьте, что есть две стороны: Аня и Боря. Боря хочет отправить сообщение Ане так,
+  чтобы никто кроме неё не мог его прочитать. Для этого Аня создаёт у себя на компьютере пару
+   приватного и публичного ключей:
+ Приватный ключ хранится только у Ани и служит для расшифровки сообщения.
+ Публичный ключ служит для шифрования — его Аня отправляет по незашифрованному каналу Боре.
+ Теперь Боря может составить своё сообщение, зашифровать его публичным ключом Ани и переслать ей.
+  Такое сообщение может расшифровать только Аня с помощью своего приватного ключа.
+
+Покажем процесс создания сертификата X.509,
+а также пары приватного и публичного ключей.
+ В случае с HTTPS этот сертификат необходим для обмена информацией о домене,
+ его владельце и ассоциированных криптографических ключах:
+
+ package main
+
+ import (
+     "bytes"
+     "crypto/rand"
+     "crypto/rsa"
+     "crypto/x509"
+     "crypto/x509/pkix"
+     "encoding/pem"
+     "log"
+     "math/big"
+     "net"
+     "time"
+ )
+
+ func main() {
+     // создаём шаблон сертификата
+     cert := &x509.Certificate{
+         // указываем уникальный номер сертификата
+         SerialNumber: big.NewInt(1658),
+         // заполняем базовую информацию о владельце сертификата
+         Subject: pkix.Name{
+             Organization: []string{"Yandex.Praktikum"},
+             Country:      []string{"RU"},
+         },
+         // разрешаем использование сертификата для 127.0.0.1 и ::1
+         IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
+         // сертификат верен, начиная со времени создания
+         NotBefore: time.Now(),
+         // время жизни сертификата — 10 лет
+         NotAfter:     time.Now().AddDate(10, 0, 0),
+         SubjectKeyId: []byte{1, 2, 3, 4, 6},
+         // устанавливаем использование ключа для цифровой подписи,
+         // а также клиентской и серверной авторизации
+         ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+         KeyUsage:    x509.KeyUsageDigitalSignature,
+     }
+
+     // создаём новый приватный RSA-ключ длиной 4096 бит
+     // обратите внимание, что для генерации ключа и сертификата
+     // используется rand.Reader в качестве источника случайных данных
+     privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+     if err != nil {
+         log.Fatal(err)
+     }
+
+     // создаём сертификат x.509
+     certBytes, err := x509.CreateCertificate(rand.Reader, cert, cert, &privateKey.PublicKey, privateKey)
+     if err != nil {
+         log.Fatal(err)
+     }
+
+     // кодируем сертификат и ключ в формате PEM, который
+     // используется для хранения и обмена криптографическими ключами
+     var certPEM bytes.Buffer
+     pem.Encode(&certPEM, &pem.Block{
+         Type:  "CERTIFICATE",
+         Bytes: certBytes,
+     })
+
+     var privateKeyPEM bytes.Buffer
+     pem.Encode(&privateKeyPEM, &pem.Block{
+         Type:  "RSA PRIVATE KEY",
+         Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+     })
+ }
+
+ Байты из переменных certPEM и privateKeyPEM можно сохранить на диск,
+  переслать по сети или передать в методы,
+   которые отвечают за непосредственное шифрование и расшифровку данных.
+
+ Пакет crypto/acme/autocert
+ Сегодня сложно представить веб-сайт без HTTPS-протокола, который требует наличия TLS-сертификата.
+ Let's Encrypt — самый известный издатель бесплатных SSL/TLS-сертификатов.
+ Он поддерживает протокол ACME для генерации сертификатов в автоматическом режиме.
+  Пакет autocert реализует клиент для протокола ACME и даёт возможность автоматически
+   генерировать сертификаты Let's Encrypt. В простейшем случае достаточно использовать функцию NewListener.
+
+   func main() {
+       mux := http.NewServeMux()
+       mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+           w.Write([]byte("Hello HTTPS!"))
+       })
+       // autocert.NewListener возвращает net.Listener,
+       // который может работать с соединениями tls.Conn и сертификатами Let's Encrypt
+       http.Serve(autocert.NewListener("mysite.ru"), mux)
+   }
+
+   Сервер будет отвечать на стандартном для HTTPS порту 443.
+   Если нужно переопределить параметры по умолчанию и указать требуемые настройки,
+   стоит использовать переменную типа autocert.Manager.
+
+   package main
+
+   import (
+       "net/http"
+
+       "golang.org/x/crypto/acme/autocert"
+   )
+
+   func main() {
+       mux := http.NewServeMux()
+       mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+           w.Write([]byte("Hello HTTPS!"))
+       })
+       // конструируем менеджер TLS-сертификатов
+       manager := &autocert.Manager{
+           // директория для хранения сертификатов
+           Cache:      autocert.DirCache("cache-dir"),
+           // функция, принимающая Terms of Service издателя сертификатов
+           Prompt:     autocert.AcceptTOS,
+           // перечень доменов, для которых будут поддерживаться сертификаты
+           HostPolicy: autocert.HostWhitelist("mysite.ru", "www.mysite.ru"),
+       }
+       // конструируем сервер с поддержкой TLS
+       server := &http.Server{
+           Addr:      ":443",
+           Handler:   mux,
+           // для TLS-конфигурации используем менеджер сертификатов
+           TLSConfig: manager.TLSConfig(),
+       }
+       server.ListenAndServeTLS("", "")
+   }
+
+   Чтобы Let’s Encrypt смог создать для вас TLS-сертификат,
+   сервер нужно запускать с правами администратора и на хосте, имеющем «белый» IP-адрес.
+
