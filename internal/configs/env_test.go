@@ -13,7 +13,7 @@ func TestReadConfig(t *testing.T) {
 	}{
 		{
 			name:    "read config with defaults",
-			want:    &Config{ServerAddress: "localhost:8080", BaseURL: "http://localhost:8080", FileStoragePath: "", DatabaseDsn: ""},
+			want:    &Config{ServerAddress: "localhost:8080", BaseURL: "http://localhost:8080", FileStoragePath: "", DatabaseDsn: "", EnableHTTPS: false},
 			wantErr: false,
 		},
 	}

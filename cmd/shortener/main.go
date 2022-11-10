@@ -60,7 +60,6 @@ func main() {
 	workerPool := worker.NewWorkerPool(storage, jobs)
 	go workerPool.Run(context.Background())
 
-	log.Printf("Server started on %v", config.ServerAddress)
 	r := chi.NewRouter()
 	r.Use(middleware.GzipHandle, middleware.AuthHandle)
 
@@ -73,5 +72,14 @@ func main() {
 	r.Get("/ping", handler.HandlerPing)
 	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(jobs))
 
-	log.Panicln(http.ListenAndServe(config.ServerAddress, r))
+	if config.EnableHTTPS {
+		// start https server
+		log.Printf("HTTPS server started on %v", config.ServerAddress)
+		// certificate and key were created by crypto/x509 package
+		log.Panicln(http.ListenAndServeTLS(config.ServerAddress, "cert.pem", "key.pem", r))
+	} else {
+		// start http server
+		log.Printf("HTTP server started on %v", config.ServerAddress)
+		log.Panicln(http.ListenAndServe(config.ServerAddress, r))
+	}
 }

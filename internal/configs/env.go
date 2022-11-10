@@ -14,6 +14,7 @@ type Config struct {
 	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH" envDefault:""`
 	DatabaseDsn     string `env:"DATABASE_DSN" envDefault:""`
+	EnableHTTPS     bool   `env:"ENABLE_HTTPS" envDefault:"false"`
 }
 
 func (c *Config) readCommandLineArgs() {
@@ -21,6 +22,7 @@ func (c *Config) readCommandLineArgs() {
 	flag.StringVar(&c.BaseURL, "b", c.BaseURL, "base url of the resulting shorthand")
 	flag.StringVar(&c.FileStoragePath, "f", c.FileStoragePath, "file storage path")
 	flag.StringVar(&c.DatabaseDsn, "d", c.DatabaseDsn, "database dsn")
+	flag.BoolVar(&c.EnableHTTPS, "s", c.EnableHTTPS, "enable https mode")
 	flag.Parse()
 }
 
