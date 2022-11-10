@@ -1,0 +1,186 @@
+Инкремент 21
+Задание для трека «Сервис сокращения URL»
+Добавьте возможность конфигурации приложения с помощью файла в формате JSON.
+ Нужно поддержать все действующие опции приложения.
+ Имя файла конфигурации должно задаваться через флаг -c/-config или переменную окружения CONFIG.
+  Значения из файла конфигурации должны иметь меньший приоритет, чем флаги или переменные окружения.
+
+Формат файла:
+{
+    "server_address": "localhost:8080", // аналог переменной окружения SERVER_ADDRESS или флага -a
+    "base_url": "http://localhost", // аналог переменной окружения BASE_URL или флага -b
+    "file_storage_path": "/path/to/file.db", // аналог переменной окружения FILE_STORAGE_PATH или флага -f
+    "database_dsn": "", // аналог переменной окружения DATABASE_DSN или флага -d
+    "enable_https": true // аналог переменной окружения ENABLE_HTTPS или флага -s
+}
+
+-------------------------------------------------------------------------
+
+Напишите программу, которая представит все переменные окружения в виде JSON и выведет результат в консоль.
+ Переменная окружения PATH должна выводиться как массив. Вот фрагмент примера:
+
+ package main
+
+ import (
+     "encoding/json"
+     "fmt"
+     "os"
+     "strings"
+ )
+
+ func main() {
+     m := make(map[string]interface{})
+
+     for _, v := range os.Environ() {
+         env := strings.SplitN(v, "=", 2)
+         if len(env) == 2 {
+             if env[0] == "PATH" {
+                 m[env[0]] = strings.Split(env[1], string(os.PathListSeparator))
+             } else {
+                 m[env[0]] = env[1]
+             }
+         }
+     }
+     out, err := json.MarshalIndent(m, "", "   ")
+     if err != nil {
+         panic(err)
+     }
+     fmt.Println(string(out))
+ }
+
+ Файловая система
+ Пакет os содержит большой набор функций для работы с файлами и директориями.
+  Можно удалять, перемещать, переименовывать и совершать множество других действий с ними.
+  Работа с файловой системой ориентирована на Unix way.
+  Поэтому имена некоторых функций и параметры могут выглядеть необычно для пользователей Windows.
+
+ Вот наиболее часто используемые функции:
+ Getwd() (dir string, err error) — возвращает текущую директорию;
+ Chdir(dir string) error — изменяет текущую директорию;
+ Chtimes(name string, atime time.Time, mtime time.Time) error — устанавливает время последнего доступа
+ и изменения файла;
+ DirFS(dir string) fs.FS — возвращает переменную типа fs.FS (файловая система),
+ в которой корневой элемент начинается с указанной директории, это гарантирует,
+ что при чтении данных программа не выйдет за пределы директории;
+
+ Mkdir(name string, perm FileMode) error — создаёт директорию с указанными правами;
+ MkdirAll(path string, perm FileMode) error — создаёт директорию, включая все необходимые родительские директории;
+ MkdirTemp(dir, pattern string) (string, error) — создаёт поддиректорию в указанной директории, добавляя случайные символы к параметру pattern, а если dir равен пустой строке, то используется директория для временных файлов;
+ Remove(name string) error — удаляет файл или пустую директорию;
+ RemoveAll(path string) error — удаляет директорию со всем содержимым;
+ ReadFile(name string) ([]byte, error) — полностью читает файл и возвращает слайс байт;
+ WriteFile(name string, data []byte, perm FileMode) error — сохраняет слайс байт в файл;
+ Stat(name string) (FileInfo, error) — получает информацию о файле или директории;
+ Truncate(name string, size int64) error — обрезает файл до указанного размера;
+ Rename(oldpath, newpath string) error — переименовывает и перемещает файл.
+
+ // CreateFiles создаёт поддиректории и файлы во временной директории.
+ func CreateFiles() (string, string) {
+     var ind int
+
+     curdir, err := os.Getwd()
+     if err != nil {
+         log.Fatal(err)
+     }
+     // создаём временную директорию
+     tmp, err := os.MkdirTemp("", "tmp")
+     if err != nil {
+         log.Fatal(err)
+     }
+     if err = os.Chdir(tmp); err != nil {
+         log.Fatal(err)
+     }
+     createFile := func(subdir string) {
+         // создаём файл и записываем туда его имя
+         ind++
+         name := filepath.Join(subdir, fmt.Sprintf("file-%d.txt", ind))
+         if err = os.WriteFile(name, []byte(name), 0666); err != nil {
+             log.Fatal(err)
+         }
+     }
+     // создаём поддиректории с двумя файлами в каждой
+     for _, name := range []string{"folder-a", "folder-b/folder_c"} {
+         os.MkdirAll(name, 0755)
+         createFile(name)
+         createFile(name)
+     }
+     createFile("")
+     return tmp, curdir
+ }
+
+ func main() {
+     dir, curdir := CreateFiles()
+     fmt.Println(dir)
+     os.Chdir(curdir)
+ }
+
+ // MyWalkDir рекурсивно проходит по всем поддиректориям.
+ func MyWalkDir(dir string, shift string) {
+     list, err := os.ReadDir(dir)
+     if err != nil {
+         log.Fatal(err)
+     }
+     for _, item := range list {
+         finfo, err := item.Info()
+         if err != nil {
+             log.Fatal(err)
+         }
+         fmt.Printf("%s%s %v", shift, item.Name(), finfo.Mode())
+         if item.IsDir() {
+             fmt.Println()
+             // рекурсивно заходим в поддиректорию
+             MyWalkDir(filepath.Join(dir, item.Name()), shift+"   ")
+         } else {
+             fmt.Printf(" %dB %s\n", finfo.Size(), finfo.ModTime().Format("2006/01/02 15:04:05"))
+         }
+     }
+ }
+
+ func main() {
+     // создаём набор файлов во временной директории
+     dir, curdir := CreateFiles()
+     MyWalkDir(dir, "")
+     os.Chdir(curdir)
+     // можем удалять временную директорию
+     os.RemoveAll(dir)
+ }
+
+ Напишите программу, которая выведет в консоль значение переменной окружения MYAPP. Если такая переменная отсутствует, программа должна запускать сама себя и передавать при запуске переменную MYAPP, которая равна полному имени исполняемого файла. После этого она будет ожидать завершения работы второй копии и печатать код её завершения.
+
+ package main
+
+ import (
+     "fmt"
+     "os"
+ )
+
+ func main() {
+     // проверяем значение переменной окружения
+     if env := os.Getenv("MYAPP"); len(env) > 0 {
+         fmt.Printf("MYAPP=%s\r\n", env)
+         return
+     }
+     // получаем имя приложения
+     name, err := os.Executable()
+     if err != nil {
+         panic(err)
+     }
+     var procAttr os.ProcAttr
+     // передаём при запуске переменную окружения MYAPP
+     procAttr.Env = []string{"MYAPP=" + name}
+     procAttr.Files = []*os.File{os.Stdin, os.Stdout, os.Stderr}
+     // запускаем приложение
+     proc, err := os.StartProcess(name, []string{name}, &procAttr)
+     if err != nil {
+         panic(err)
+     }
+     // ждём окончания работы запущенного приложения
+     state, err := proc.Wait()
+     if err != nil {
+         panic(err)
+     }
+     fmt.Println("ExitCode", state.ExitCode())
+ }
+
+ https://pkg.go.dev/os
+
