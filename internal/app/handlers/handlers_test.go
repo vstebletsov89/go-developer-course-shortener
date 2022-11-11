@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -38,9 +39,25 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io
 
 	respBody, err := io.ReadAll(resp.Body)
 	assert.NoError(t, err)
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 
 	return resp, string(respBody)
+}
+
+func createFileRepository(t *testing.T) (string, string) {
+	dir, err := os.Getwd()
+	assert.NoError(t, err)
+
+	temp, err := os.MkdirTemp(dir, "test")
+	assert.NoError(t, err)
+
+	// create file repository
+	file := filepath.Join(temp, "file.db")
+	err = os.WriteFile(file, []byte(""), 0666)
+	assert.NoError(t, err)
+
+	return temp, file
 }
 
 func AuthHandleMock(next http.Handler) http.Handler {
@@ -97,14 +114,16 @@ func TestMiddlewareHandlersMemoryStorage(t *testing.T) {
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	shortURL, err := url.Parse(body)
 	assert.NoError(t, err)
 
 	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 }
@@ -121,7 +140,8 @@ func TestHandlerUserStorageGETNoUrlsMemoryStorage(t *testing.T) {
 
 	// get original url
 	resp, _ := testRequest(t, ts, http.MethodGet, "/api/user/urls", nil)
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 }
@@ -137,31 +157,33 @@ func TestHandlerUseStorageDELETENoUrlsMemoryStorage(t *testing.T) {
 	defer ts.Close()
 
 	resp, _ := testRequest(t, ts, http.MethodDelete, "/api/user/urls", nil)
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
 func TestHandlerUseStorageDELETENoUrlsFileStorage(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	assert.NoError(t, err)
-
-	file, err := os.CreateTemp(homeDir, "test")
-	assert.NoError(t, err)
-
-	defer os.RemoveAll(file.Name())
+	temp, storagePath := createFileRepository(t)
+	defer func() {
+		err := os.RemoveAll(temp)
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: file.Name(),
+		FileStoragePath: storagePath,
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 
 	resp, _ := testRequest(t, ts, http.MethodDelete, "/api/user/urls", nil)
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
@@ -179,7 +201,8 @@ func TestHandlerUseStorageDELETEMemoryStorage(t *testing.T) {
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	shortURL, err := url.Parse(body)
 	assert.NoError(t, err)
@@ -191,24 +214,25 @@ func TestHandlerUseStorageDELETEMemoryStorage(t *testing.T) {
 
 	// delete user urls
 	resp, _ = testRequest(t, ts, http.MethodDelete, "/api/user/urls", bytes.NewBufferString(string(j)))
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 
 	assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 }
 
 func TestHandlerUseStorageDELETEFileStorage(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	assert.NoError(t, err)
-
-	file, err := os.CreateTemp(homeDir, "test")
-	assert.NoError(t, err)
-
-	defer os.RemoveAll(file.Name())
+	temp, storagePath := createFileRepository(t)
+	defer func() {
+		err := os.RemoveAll(temp)
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: file.Name(),
+		FileStoragePath: storagePath,
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
@@ -217,9 +241,10 @@ func TestHandlerUseStorageDELETEFileStorage(t *testing.T) {
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-	defer resp.Body.Close()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	shortURL, err := url.Parse(body)
+	assert.NoError(t, err)
+	err = resp.Body.Close()
 	assert.NoError(t, err)
 
 	var deleteURLS []string
@@ -229,7 +254,8 @@ func TestHandlerUseStorageDELETEFileStorage(t *testing.T) {
 
 	// delete user urls
 	resp, _ = testRequest(t, ts, http.MethodDelete, "/api/user/urls", bytes.NewBufferString(string(j)))
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 
 	assert.Equal(t, http.StatusAccepted, resp.StatusCode)
 }
@@ -246,26 +272,25 @@ func TestHandlerPingMemoryStorage(t *testing.T) {
 
 	// try to ping connection
 	resp, _ := testRequest(t, ts, http.MethodGet, "/ping", nil)
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 }
 
 func TestHandlerPingFileStorage(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	assert.NoError(t, err)
-
-	file, err := os.CreateTemp(homeDir, "test")
-	assert.NoError(t, err)
-
-	defer os.RemoveAll(file.Name())
-
-	log.Printf("Temporary file name: %s", file.Name())
+	temp, storagePath := createFileRepository(t)
+	defer func() {
+		err := os.RemoveAll(temp)
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: file.Name(),
+		FileStoragePath: storagePath,
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
@@ -273,7 +298,8 @@ func TestHandlerPingFileStorage(t *testing.T) {
 
 	// try to ping connection
 	resp, _ := testRequest(t, ts, http.MethodGet, "/ping", nil)
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
@@ -292,16 +318,18 @@ func TestGetUserLinksMemoryStorage(t *testing.T) {
 		// prepare short url
 		originalURL := "https://github.com/test_repo" + strconv.Itoa(i)
 		resp, _ := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-		resp.Body.Close()
+		err := resp.Body.Close()
+		assert.NoError(t, err)
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	}
 
 	// get original urls
 	resp, body := testRequest(t, ts, http.MethodGet, "/api/user/urls", nil)
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 
 	var response []types.Link
-	err := json.Unmarshal([]byte(body), &response)
+	err = json.Unmarshal([]byte(body), &response)
 	assert.NoError(t, err)
 
 	for i, v := range response {
@@ -313,18 +341,18 @@ func TestGetUserLinksMemoryStorage(t *testing.T) {
 }
 
 func TestGetUserLinksFileStorage(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	assert.NoError(t, err)
-
-	file, err := os.CreateTemp(homeDir, "test")
-	assert.NoError(t, err)
-
-	defer os.RemoveAll(file.Name())
+	temp, storagePath := createFileRepository(t)
+	defer func() {
+		err := os.RemoveAll(temp)
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: file.Name(),
+		FileStoragePath: storagePath,
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
@@ -335,13 +363,15 @@ func TestGetUserLinksFileStorage(t *testing.T) {
 		// prepare short url
 		originalURL := "https://github.com/test_repo" + strconv.Itoa(i)
 		resp, _ := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-		resp.Body.Close()
+		err := resp.Body.Close()
+		assert.NoError(t, err)
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	}
 
 	// get original urls
 	resp, body := testRequest(t, ts, http.MethodGet, "/api/user/urls", nil)
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 
 	var response []types.Link
 	err = json.Unmarshal([]byte(body), &response)
@@ -356,20 +386,18 @@ func TestGetUserLinksFileStorage(t *testing.T) {
 }
 
 func TestBothHandlersFileStorageInvalidRecord(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	assert.NoError(t, err)
-
-	file, err := os.CreateTemp(homeDir, "test")
-	assert.NoError(t, err)
-
-	defer os.RemoveAll(file.Name())
-
-	log.Printf("Temporary file name: %s", file.Name())
+	temp, storagePath := createFileRepository(t)
+	defer func() {
+		err := os.RemoveAll(temp)
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: file.Name(),
+		FileStoragePath: storagePath,
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
@@ -378,30 +406,31 @@ func TestBothHandlersFileStorageInvalidRecord(t *testing.T) {
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, _ := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, "/AAAAA", nil)
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, "", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 }
 
 func TestBothHandlersFileStorageOneRecord(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	assert.NoError(t, err)
-
-	file, err := os.CreateTemp(homeDir, "test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(file.Name())
-
-	log.Printf("Temporary file name: %s", file.Name())
+	temp, storagePath := createFileRepository(t)
+	defer func() {
+		err := os.RemoveAll(temp)
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: file.Name(),
+		FileStoragePath: storagePath,
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
@@ -410,32 +439,33 @@ func TestBothHandlersFileStorageOneRecord(t *testing.T) {
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	shortURL, err := url.Parse(body)
 	assert.NoError(t, err)
 
 	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 }
 
 func TestBothHandlersFileStorageTwoRecords(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	assert.NoError(t, err)
-
-	file, err := os.CreateTemp(homeDir, "test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(file.Name())
-
-	log.Printf("Temporary file name: %s", file.Name())
+	temp, storagePath := createFileRepository(t)
+	defer func() {
+		err := os.RemoveAll(temp)
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: file.Name(),
+		FileStoragePath: storagePath,
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
@@ -444,27 +474,31 @@ func TestBothHandlersFileStorageTwoRecords(t *testing.T) {
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	shortURL1, err := url.Parse(body)
 	assert.NoError(t, err)
 
 	// prepare short url
 	resp, body = testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString("https://github.com/test_repo2"))
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	shortURL2, err := url.Parse(body)
 	assert.NoError(t, err)
 
 	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, shortURL2.Path, nil)
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, "https://github.com/test_repo2", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 
 	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, shortURL1.Path, nil)
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 }
@@ -482,30 +516,33 @@ func TestBothHandlersMemoryStorage(t *testing.T) {
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	shortURL, err := url.Parse(body)
 	assert.NoError(t, err)
 
 	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 }
 
 func TestBothHandlersFileStorage(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	assert.NoError(t, err)
-
-	file, err := os.CreateTemp(homeDir, "test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(file.Name())
+	temp, storagePath := createFileRepository(t)
+	defer func() {
+		err := os.RemoveAll(temp)
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	config := &configs.Config{
 		ServerAddress:   "localhost:8080",
 		BaseURL:         "http://localhost:8080",
-		FileStoragePath: file.Name(),
+		FileStoragePath: storagePath,
 	}
 	r := NewRouter(config)
 	ts := httptest.NewServer(r)
@@ -514,14 +551,16 @@ func TestBothHandlersFileStorage(t *testing.T) {
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	shortURL, err := url.Parse(body)
 	assert.NoError(t, err)
 
 	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 }
@@ -539,42 +578,8 @@ func TestBothHandlersWithJSONMemoryStorage(t *testing.T) {
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
-	defer resp.Body.Close()
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	var response types.ResponseJSON
-	err := json.Unmarshal([]byte(body), &response)
+	err := resp.Body.Close()
 	assert.NoError(t, err)
-	shortURL, err := url.Parse(response.Result)
-	assert.NoError(t, err)
-
-	// get original url
-	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
-	defer resp.Body.Close()
-	assert.Equal(t, originalURL, resp.Header.Get("Location"))
-	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
-}
-
-func TestBothHandlersWithJSONFileStorage(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	assert.NoError(t, err)
-
-	file, err := os.CreateTemp(homeDir, "test")
-	assert.NoError(t, err)
-	defer os.RemoveAll(file.Name())
-
-	config := &configs.Config{
-		ServerAddress:   "localhost:8080",
-		BaseURL:         "http://localhost:8080",
-		FileStoragePath: file.Name(),
-	}
-	r := NewRouter(config)
-	ts := httptest.NewServer(r)
-	defer ts.Close()
-
-	// prepare short url
-	originalURL := "https://github.com/test_repo1"
-	resp, body := testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
-	defer resp.Body.Close()
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	var response types.ResponseJSON
 	err = json.Unmarshal([]byte(body), &response)
@@ -584,7 +589,46 @@ func TestBothHandlersWithJSONFileStorage(t *testing.T) {
 
 	// get original url
 	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
+	assert.Equal(t, originalURL, resp.Header.Get("Location"))
+	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
+}
+
+func TestBothHandlersWithJSONFileStorage(t *testing.T) {
+	temp, storagePath := createFileRepository(t)
+	defer func() {
+		err := os.RemoveAll(temp)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: storagePath,
+	}
+	r := NewRouter(config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// prepare short url
+	originalURL := "https://github.com/test_repo1"
+	resp, body := testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
+	err := resp.Body.Close()
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	var response types.ResponseJSON
+	err = json.Unmarshal([]byte(body), &response)
+	assert.NoError(t, err)
+	shortURL, err := url.Parse(response.Result)
+	assert.NoError(t, err)
+
+	// get original url
+	resp, _ = testRequest(t, ts, http.MethodGet, shortURL.Path, nil)
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 	assert.Equal(t, originalURL, resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
 }
@@ -623,7 +667,8 @@ func TestHandlerGetErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, body := testRequest(t, ts, http.MethodGet, fmt.Sprintf("/%d", tt.id), nil)
-			resp.Body.Close()
+			err := resp.Body.Close()
+			assert.NoError(t, err)
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 			assert.Equal(t, tt.want.responseBody, body)
 			assert.Equal(t, tt.want.headerLocation, resp.Header.Get("Location"))
@@ -673,7 +718,8 @@ func TestHandlerPost(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, body := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(tt.longURL))
-			resp.Body.Close()
+			err := resp.Body.Close()
+			assert.NoError(t, err)
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 			assert.Equal(t, tt.want.responseBody, body)
 			assert.Equal(t, tt.want.contentType, resp.Header.Get(ContentType))
@@ -736,7 +782,8 @@ func TestHandlerJsonPost(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, body := testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(tt.jsonBody))
-			resp.Body.Close()
+			err := resp.Body.Close()
+			assert.NoError(t, err)
 			assert.Equal(t, tt.want.statusCode, resp.StatusCode)
 
 			if tt.want.checkJSON {
