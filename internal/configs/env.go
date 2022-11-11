@@ -15,8 +15,8 @@ import (
 
 // Config contains global settings of service.
 type Config struct {
-	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"" json:"server_address"`
-	BaseURL         string `env:"BASE_URL" envDefault:"" json:"base_url"`
+	ServerAddress   string `env:"SERVER_ADDRESS" envDefault:"localhost:8080" json:"server_address"`
+	BaseURL         string `env:"BASE_URL" envDefault:"http://localhost:8080" json:"base_url"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH" envDefault:"" json:"file_storage_path"`
 	DatabaseDsn     string `env:"DATABASE_DSN" envDefault:"" json:"database_dsn"`
 	EnableHTTPS     bool   `env:"ENABLE_HTTPS" envDefault:"false" json:"enable_https"`
@@ -65,17 +65,17 @@ func ReadConfig() (*Config, error) {
 		}
 
 		// config file has low priority
-		// set only empty options
-		if cfg.ServerAddress == "" {
+		// overwrite only default or empty options
+		if cfg.ServerAddress == "localhost:8080" && fileConfig.ServerAddress != "" {
 			cfg.ServerAddress = fileConfig.ServerAddress
 		}
-		if cfg.BaseURL == "" {
+		if cfg.BaseURL == "http://localhost:8080" && fileConfig.BaseURL != "" {
 			cfg.BaseURL = fileConfig.BaseURL
 		}
-		if cfg.FileStoragePath == "" {
+		if cfg.FileStoragePath == "" && fileConfig.FileStoragePath != "" {
 			cfg.FileStoragePath = fileConfig.FileStoragePath
 		}
-		if cfg.DatabaseDsn == "" {
+		if cfg.DatabaseDsn == "" && fileConfig.DatabaseDsn != "" {
 			cfg.DatabaseDsn = fileConfig.DatabaseDsn
 		}
 		if !cfg.EnableHTTPS && fileConfig.EnableHTTPS {

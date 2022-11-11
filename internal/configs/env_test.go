@@ -20,7 +20,7 @@ func TestReadConfig(t *testing.T) {
 	}{
 		{
 			name:         "read config with defaults",
-			want:         &Config{ServerAddress: "", BaseURL: "", FileStoragePath: "", DatabaseDsn: "", EnableHTTPS: false},
+			want:         &Config{ServerAddress: "localhost:8080", BaseURL: "http://localhost:8080", FileStoragePath: "", DatabaseDsn: "", EnableHTTPS: false},
 			jsonConfig:   nil,
 			deleteConfig: false,
 			wantErr:      false,
