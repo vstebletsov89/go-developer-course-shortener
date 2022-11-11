@@ -167,9 +167,7 @@ func TestHandlerUseStorageDELETENoUrlsFileStorage(t *testing.T) {
 	temp, storagePath := createFileRepository(t)
 	defer func() {
 		err := os.RemoveAll(temp)
-		if err != nil {
-			panic(err)
-		}
+		assert.NoError(t, err)
 	}()
 
 	config := &configs.Config{
@@ -224,9 +222,7 @@ func TestHandlerUseStorageDELETEFileStorage(t *testing.T) {
 	temp, storagePath := createFileRepository(t)
 	defer func() {
 		err := os.RemoveAll(temp)
-		if err != nil {
-			panic(err)
-		}
+		assert.NoError(t, err)
 	}()
 
 	config := &configs.Config{
@@ -282,9 +278,7 @@ func TestHandlerPingFileStorage(t *testing.T) {
 	temp, storagePath := createFileRepository(t)
 	defer func() {
 		err := os.RemoveAll(temp)
-		if err != nil {
-			panic(err)
-		}
+		assert.NoError(t, err)
 	}()
 
 	config := &configs.Config{
@@ -344,9 +338,7 @@ func TestGetUserLinksFileStorage(t *testing.T) {
 	temp, storagePath := createFileRepository(t)
 	defer func() {
 		err := os.RemoveAll(temp)
-		if err != nil {
-			panic(err)
-		}
+		assert.NoError(t, err)
 	}()
 
 	config := &configs.Config{
@@ -389,9 +381,7 @@ func TestBothHandlersFileStorageInvalidRecord(t *testing.T) {
 	temp, storagePath := createFileRepository(t)
 	defer func() {
 		err := os.RemoveAll(temp)
-		if err != nil {
-			panic(err)
-		}
+		assert.NoError(t, err)
 	}()
 
 	config := &configs.Config{
@@ -422,9 +412,7 @@ func TestBothHandlersFileStorageOneRecord(t *testing.T) {
 	temp, storagePath := createFileRepository(t)
 	defer func() {
 		err := os.RemoveAll(temp)
-		if err != nil {
-			panic(err)
-		}
+		assert.NoError(t, err)
 	}()
 
 	config := &configs.Config{
@@ -457,9 +445,7 @@ func TestBothHandlersFileStorageTwoRecords(t *testing.T) {
 	temp, storagePath := createFileRepository(t)
 	defer func() {
 		err := os.RemoveAll(temp)
-		if err != nil {
-			panic(err)
-		}
+		assert.NoError(t, err)
 	}()
 
 	config := &configs.Config{
@@ -534,9 +520,7 @@ func TestBothHandlersFileStorage(t *testing.T) {
 	temp, storagePath := createFileRepository(t)
 	defer func() {
 		err := os.RemoveAll(temp)
-		if err != nil {
-			panic(err)
-		}
+		assert.NoError(t, err)
 	}()
 
 	config := &configs.Config{
@@ -599,9 +583,7 @@ func TestBothHandlersWithJSONFileStorage(t *testing.T) {
 	temp, storagePath := createFileRepository(t)
 	defer func() {
 		err := os.RemoveAll(temp)
-		if err != nil {
-			panic(err)
-		}
+		assert.NoError(t, err)
 	}()
 
 	config := &configs.Config{

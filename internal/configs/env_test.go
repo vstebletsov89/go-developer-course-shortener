@@ -75,22 +75,16 @@ func TestReadConfig(t *testing.T) {
 
 				defer func() {
 					err := os.Unsetenv("CONFIG")
-					if err != nil {
-						panic(err)
-					}
+					assert.NoError(t, err)
 				}()
 
 				if tt.deleteConfig {
 					err := os.RemoveAll(temp)
-					if err != nil {
-						panic(err)
-					}
+					assert.NoError(t, err)
 				} else {
 					defer func() {
 						err := os.RemoveAll(temp)
-						if err != nil {
-							panic(err)
-						}
+						assert.NoError(t, err)
 					}()
 				}
 			}
