@@ -6,6 +6,7 @@ import (
 	"errors"
 	"go-developer-course-shortener/internal/app/types"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 )
@@ -112,7 +113,7 @@ func (r *FileRepository) Ping() bool {
 func (r *FileRepository) ReleaseStorage() {
 	log.Println("Storage released")
 	err := r.file.Close()
-	if err != nil {
+	if err != nil && !errors.Is(err, fs.ErrClosed) {
 		log.Fatalf("Failed to release file storage. Error: %v", err.Error())
 	}
 }
