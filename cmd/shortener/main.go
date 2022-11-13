@@ -46,12 +46,6 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to connect to database. Error: %v", err.Error())
 		}
-		defer func(conn *pgx.Conn, ctx context.Context) {
-			err := conn.Close(ctx)
-			if err != nil {
-				log.Fatalf("Failed to close database connection. Error: %v", err.Error())
-			}
-		}(conn, ctx)
 
 		storage, err = repository.NewDBRepository(conn)
 		if err != nil {
@@ -79,7 +73,7 @@ func main() {
 
 		// graceful shutdown
 		if err := srv.Shutdown(ctx); err != nil {
-			log.Fatalf("HTTP server Shutdown: %v", err)
+			log.Fatalf("HTTP/HTTPS server Shutdown: %v", err)
 		}
 
 		// connection closed
@@ -106,6 +100,8 @@ func main() {
 
 	// wait for graceful shutdown
 	<-connClosed
+	// release resources
+	storage.ReleaseStorage()
 	log.Println("Server Shutdown gracefully")
 }
 

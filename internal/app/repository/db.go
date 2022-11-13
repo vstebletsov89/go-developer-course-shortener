@@ -120,6 +120,14 @@ func (r *DBRepository) Ping() bool {
 	return err == nil
 }
 
+func (r *DBRepository) ReleaseStorage() {
+	log.Println("Storage released")
+	err := r.conn.Close(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to close database connection. Error: %v", err.Error())
+	}
+}
+
 // NewDBRepository returns a new DBRepository.
 func NewDBRepository(connection *pgx.Conn) (*DBRepository, error) {
 	log.Print("DB storage is used")
