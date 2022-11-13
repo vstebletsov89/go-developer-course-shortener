@@ -49,13 +49,13 @@ func (p *Pool) Run(ctx context.Context) {
 				log.Println("Worker pool context done: complete all awaiting jobs")
 				for v := range p.inputCh {
 					wg.Add(1)
-					go func() {
+					go func(j Job) {
 						defer wg.Done()
-						if err := p.repository.DeleteURLS(ctx, v.UserID, v.ShortURLS); err != nil {
+						if err := p.repository.DeleteURLS(ctx, j.UserID, j.ShortURLS); err != nil {
 							log.Println(err)
 							return
 						}
-					}()
+					}(v)
 				}
 			}
 			log.Println("Worker pool context done: all tasks done")
