@@ -45,7 +45,20 @@ func (p *Pool) Run(ctx context.Context) {
 				}
 			}()
 		case <-ctx.Done():
-			log.Println("Worker pool context done")
+			if len(p.inputCh) > 0 {
+				log.Println("Worker pool context done: complete all awaiting jobs")
+				for v := range p.inputCh {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						if err := p.repository.DeleteURLS(ctx, v.UserID, v.ShortURLS); err != nil {
+							log.Println(err)
+							return
+						}
+					}()
+				}
+			}
+			log.Println("Worker pool context done: all tasks done")
 			return
 		}
 	}

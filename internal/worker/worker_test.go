@@ -4,7 +4,6 @@ import (
 	"context"
 	"go-developer-course-shortener/internal/app/repository"
 	"testing"
-	"time"
 )
 
 func TestNewWorkerPool(t *testing.T) {
@@ -32,19 +31,28 @@ func TestNewWorkerPool(t *testing.T) {
 
 func TestPoolRun(t *testing.T) {
 	tests := []struct {
-		name    string
-		repo    repository.Repository
-		timeout bool
+		name         string
+		repo         repository.Repository
+		cancel       bool
+		awaitingJobs bool
 	}{
 		{
-			name:    "test workerPool.Run with timeout",
-			repo:    repository.NewInMemoryRepository(),
-			timeout: true,
+			name:         "workerPool.Run emulation of shutdown without awaiting jobs",
+			repo:         repository.NewInMemoryRepository(),
+			cancel:       true,
+			awaitingJobs: false,
 		},
 		{
-			name:    "test workerPool.Run without timeout",
-			repo:    repository.NewInMemoryRepository(),
-			timeout: false,
+			name:         "workerPool.Run emulation of shutdown with awaiting jobs",
+			repo:         repository.NewInMemoryRepository(),
+			cancel:       true,
+			awaitingJobs: true,
+		},
+		{
+			name:         "workerPool.Run without shutdown",
+			repo:         repository.NewInMemoryRepository(),
+			cancel:       false,
+			awaitingJobs: true,
 		},
 	}
 	for _, tt := range tests {
@@ -52,17 +60,26 @@ func TestPoolRun(t *testing.T) {
 			jobs := make(chan Job, MaxWorkerPoolSize)
 			workerPool := NewWorkerPool(tt.repo, jobs)
 
-			if tt.timeout {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
-				defer cancel()
-				go workerPool.Run(ctx)
-			} else {
-				ctx := context.Background()
-				go workerPool.Run(ctx)
+			var ctx context.Context
+			var cancel context.CancelFunc
 
-				j := Job{UserID: "testUser", ShortURLS: nil}
-				jobs <- j
+			if tt.cancel {
+				ctx, cancel = context.WithCancel(context.Background())
+				cancel() // cancel context
+			} else {
+				ctx = context.Background()
 			}
+
+			go workerPool.Run(ctx)
+
+			if tt.awaitingJobs {
+				for i := 0; i < 10000; i++ {
+					j := Job{UserID: "testUser", ShortURLS: nil}
+					jobs <- j
+				}
+			}
+
+			ctx.Done()
 		})
 	}
 }
