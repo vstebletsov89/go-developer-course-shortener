@@ -22,12 +22,18 @@ type Job struct {
 // Pool represents queue of jobs.
 type Pool struct {
 	repository repository.Repository
-	inputCh    <-chan Job
+	inputCh    chan Job
 }
 
 // NewWorkerPool returns a new Pool, serving the provided Repository.
-func NewWorkerPool(repo repository.Repository, inputCh <-chan Job) *Pool {
+func NewWorkerPool(repo repository.Repository, inputCh chan Job) *Pool {
 	return &Pool{repository: repo, inputCh: inputCh}
+}
+
+// ClosePool closes input channel for new tasks.
+func (p *Pool) ClosePool() {
+	log.Println("Closing worker pool")
+	close(p.inputCh)
 }
 
 // Run processing Job channels in the current context.
@@ -37,6 +43,7 @@ func (p *Pool) Run(ctx context.Context) {
 		select {
 		case v := <-p.inputCh:
 			wg.Add(1)
+			log.Printf("Process normal job %v", v)
 			go func() {
 				defer wg.Done()
 				if err := p.repository.DeleteURLS(ctx, v.UserID, v.ShortURLS); err != nil {
@@ -44,21 +51,24 @@ func (p *Pool) Run(ctx context.Context) {
 					return
 				}
 			}()
+			wg.Wait()
+			log.Printf("Done normal job %v", v)
 		case <-ctx.Done():
-			if len(p.inputCh) > 0 {
-				log.Println("Worker pool context done: complete all awaiting jobs")
-				for v := range p.inputCh {
-					wg.Add(1)
-					go func(j Job) {
-						defer wg.Done()
-						if err := p.repository.DeleteURLS(ctx, j.UserID, j.ShortURLS); err != nil {
-							log.Println(err)
-							return
-						}
-					}(v)
-				}
+			log.Println("Worker pool context done")
+			// range input channel until that channel closes
+			for v := range p.inputCh {
+				wg.Add(1)
+				log.Printf("Process shutdown job %v", v)
+				go func(j Job) {
+					defer wg.Done()
+					if err := p.repository.DeleteURLS(ctx, j.UserID, j.ShortURLS); err != nil {
+						log.Println(err)
+						return
+					}
+				}(v)
+				wg.Wait()
+				log.Printf("Done shutdown job %v", v)
 			}
-			log.Println("Worker pool context done: all tasks done")
 			return
 		}
 	}

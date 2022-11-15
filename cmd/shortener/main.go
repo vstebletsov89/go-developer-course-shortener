@@ -81,6 +81,9 @@ func main() {
 
 		// stop server context and release resources
 		cancel()
+
+		// close worker pool
+		workerPool.ClosePool()
 	}()
 
 	if config.EnableHTTPS {

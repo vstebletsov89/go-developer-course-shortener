@@ -70,13 +70,7 @@ func TestReadConfig(t *testing.T) {
 				err = os.WriteFile(file, cfg, 0666)
 				assert.NoError(t, err)
 
-				err = os.Setenv("CONFIG", file)
-				assert.NoError(t, err)
-
-				defer func() {
-					err := os.Unsetenv("CONFIG")
-					assert.NoError(t, err)
-				}()
+				t.Setenv("CONFIG", file)
 
 				if tt.deleteConfig {
 					err := os.RemoveAll(temp)

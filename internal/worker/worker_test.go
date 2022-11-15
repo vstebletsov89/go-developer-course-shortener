@@ -2,15 +2,17 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"go-developer-course-shortener/internal/app/repository"
 	"testing"
+	"time"
 )
 
 func TestNewWorkerPool(t *testing.T) {
 	tests := []struct {
 		name string
 		repo repository.Repository
-		jobs <-chan Job
+		jobs chan Job
 	}{
 		{
 			name: "test NewWorkerPool",
@@ -31,55 +33,51 @@ func TestNewWorkerPool(t *testing.T) {
 
 func TestPoolRun(t *testing.T) {
 	tests := []struct {
-		name         string
-		repo         repository.Repository
-		cancel       bool
-		awaitingJobs bool
+		name     string
+		userID   string
+		shutdown bool
 	}{
 		{
-			name:         "workerPool.Run emulation of shutdown without awaiting jobs",
-			repo:         repository.NewInMemoryRepository(),
-			cancel:       true,
-			awaitingJobs: false,
+			name:     "workerPool.Run normal execution",
+			userID:   "UserNormal",
+			shutdown: false,
 		},
 		{
-			name:         "workerPool.Run emulation of shutdown with awaiting jobs",
-			repo:         repository.NewInMemoryRepository(),
-			cancel:       true,
-			awaitingJobs: true,
-		},
-		{
-			name:         "workerPool.Run without shutdown",
-			repo:         repository.NewInMemoryRepository(),
-			cancel:       false,
-			awaitingJobs: true,
+			name:     "workerPool.Run emulation of shutdown",
+			userID:   "UserShutdown",
+			shutdown: true,
 		},
 	}
+
+	repo := repository.NewInMemoryRepository()
+
+	jobs := make(chan Job, MaxWorkerPoolSize)
+	workerPool := NewWorkerPool(repo, jobs)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go workerPool.Run(ctx)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			jobs := make(chan Job, MaxWorkerPoolSize)
-			workerPool := NewWorkerPool(tt.repo, jobs)
-
-			var ctx context.Context
-			var cancel context.CancelFunc
-
-			if tt.cancel {
-				ctx, cancel = context.WithCancel(context.Background())
-				cancel() // cancel context
-			} else {
-				ctx = context.Background()
-			}
-
-			go workerPool.Run(ctx)
-
-			if tt.awaitingJobs {
-				for i := 0; i < 10000; i++ {
-					j := Job{UserID: "testUser", ShortURLS: nil}
+			for i := 0; i < 3; i++ {
+				if tt.shutdown {
+					cancel()
+					// send one task and close the channel
+					user := fmt.Sprintf("%v%d", tt.userID, i)
+					j := Job{UserID: user, ShortURLS: nil}
+					jobs <- j
+					workerPool.ClosePool()
+					break
+				} else {
+					user := fmt.Sprintf("%v%d", tt.userID, i)
+					j := Job{UserID: user, ShortURLS: nil}
 					jobs <- j
 				}
 			}
 
-			ctx.Done()
+			time.Sleep(1 * time.Second) // server simulation
 		})
 	}
 }
