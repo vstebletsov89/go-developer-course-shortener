@@ -12,6 +12,8 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v4"
@@ -31,21 +33,23 @@ func main() {
 	log.SetOutput(os.Stdout)
 	config, err := configs.ReadConfig()
 	if err != nil {
-		log.Panicln("Failed to read server configuration")
+		log.Fatalf("Failed to read server configuration. Error: %v", err.Error())
 	}
+
+	// Server run context
+	ctx, cancel := context.WithCancel(context.Background())
 
 	var storage repository.Repository
 	switch {
 	case config.DatabaseDsn != "":
-		conn, err := pgx.Connect(context.Background(), config.DatabaseDsn)
+		conn, err := pgx.Connect(ctx, config.DatabaseDsn)
 		if err != nil {
-			log.Panicln("Failed to connect to database")
+			log.Fatalf("Failed to connect to database. Error: %v", err.Error())
 		}
-		defer conn.Close(context.Background())
 
 		storage, err = repository.NewDBRepository(conn)
 		if err != nil {
-			log.Panicln("Failed to create DB repository")
+			log.Fatalf("Failed to create DB repository. Error: %v", err.Error())
 		}
 	case config.FileStoragePath != "":
 		storage = repository.NewFileRepository(config.FileStoragePath)
@@ -53,14 +57,60 @@ func main() {
 		storage = repository.NewInMemoryRepository()
 	}
 
-	handler := handlers.NewHTTPHandler(config, storage)
-
 	// setup worker pool to handle delete requests
 	jobs := make(chan worker.Job, worker.MaxWorkerPoolSize)
 	workerPool := worker.NewWorkerPool(storage, jobs)
-	go workerPool.Run(context.Background())
+	go workerPool.Run(ctx)
 
-	log.Printf("Server started on %v", config.ServerAddress)
+	srv := http.Server{Addr: config.ServerAddress, Handler: service(jobs, config, storage)}
+
+	connClosed := make(chan struct{})
+	sigint := make(chan os.Signal, 1)
+	signal.Notify(sigint, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+
+	go func() {
+		<-sigint
+
+		// graceful shutdown
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Fatalf("HTTP/HTTPS server Shutdown: %v", err)
+		}
+
+		// connection closed
+		close(connClosed)
+
+		// stop server context and release resources
+		cancel()
+
+		// close worker pool
+		workerPool.ClosePool()
+	}()
+
+	if config.EnableHTTPS {
+		// start https server
+		log.Printf("HTTPS server started on %v", config.ServerAddress)
+		// certificate and key were created by crypto/x509 package
+		if err := srv.ListenAndServeTLS("cert.pem", "key.pem"); err != http.ErrServerClosed {
+			log.Fatalf("HTTPS server ListenAndServe: %v", err)
+		}
+	} else {
+		// start http server
+		log.Printf("HTTP server started on %v", config.ServerAddress)
+		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+			log.Fatalf("HTTP server ListenAndServe: %v", err)
+		}
+	}
+
+	// wait for graceful shutdown
+	<-connClosed
+	// release resources
+	storage.ReleaseStorage()
+	log.Println("Server Shutdown gracefully")
+}
+
+func service(job chan worker.Job, config *configs.Config, storage repository.Repository) http.Handler {
+	handler := handlers.NewHTTPHandler(config, storage)
+
 	r := chi.NewRouter()
 	r.Use(middleware.GzipHandle, middleware.AuthHandle)
 
@@ -71,7 +121,7 @@ func main() {
 	r.Get("/{ID}", handler.HandlerGET)
 	r.Get("/api/user/urls", handler.HandlerUserStorageGET)
 	r.Get("/ping", handler.HandlerPing)
-	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(jobs))
+	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(job))
 
-	log.Panicln(http.ListenAndServe(config.ServerAddress, r))
+	return r
 }

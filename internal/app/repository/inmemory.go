@@ -64,6 +64,11 @@ func (r *InMemoryRepository) Ping() bool {
 	return true
 }
 
+func (r *InMemoryRepository) ReleaseStorage() {
+	log.Println("Storage released")
+	// no need to release in memory storage
+}
+
 // NewInMemoryRepository returns a new InMemoryRepository.
 func NewInMemoryRepository() *InMemoryRepository {
 	log.Print("Memory storage is used")

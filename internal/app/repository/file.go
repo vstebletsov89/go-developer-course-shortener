@@ -6,6 +6,7 @@ import (
 	"errors"
 	"go-developer-course-shortener/internal/app/types"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 )
@@ -13,6 +14,7 @@ import (
 // FileRepository implements Repository interface
 type FileRepository struct {
 	fileStoragePath string
+	file            *os.File
 }
 
 type fileRecord struct {
@@ -22,13 +24,14 @@ type fileRecord struct {
 }
 
 func (r *FileRepository) SaveURL(userID string, shortURL string, originalURL string) error {
-	file, err := os.OpenFile(r.fileStoragePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
+	var err error
+	r.file, err = os.OpenFile(r.fileStoragePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer r.ReleaseStorage()
 
-	encoder := json.NewEncoder(file)
+	encoder := json.NewEncoder(r.file)
 	err = encoder.Encode(&fileRecord{UserID: userID, ID: shortURL, OriginalURL: originalURL})
 	if err != nil {
 		return err
@@ -53,13 +56,14 @@ func (r *FileRepository) DeleteURLS(ctx context.Context, userID string, shortURL
 }
 
 func (r *FileRepository) GetURL(shortURL string) (types.OriginalLink, error) {
-	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
+	var err error
+	r.file, err = os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
 		return types.OriginalLink{}, err
 	}
-	defer file.Close()
+	defer r.ReleaseStorage()
 
-	decoder := json.NewDecoder(file)
+	decoder := json.NewDecoder(r.file)
 	for {
 		record := &fileRecord{}
 		if err := decoder.Decode(&record); err == io.EOF {
@@ -78,13 +82,14 @@ func (r *FileRepository) GetURL(shortURL string) (types.OriginalLink, error) {
 
 func (r *FileRepository) GetUserStorage(userID string) ([]types.Link, error) {
 	var links []types.Link
-	file, err := os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
+	var err error
+	r.file, err = os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
 		return links, err
 	}
-	defer file.Close()
+	defer r.ReleaseStorage()
 
-	decoder := json.NewDecoder(file)
+	decoder := json.NewDecoder(r.file)
 	for {
 		record := &fileRecord{}
 		if err := decoder.Decode(&record); err == io.EOF {
@@ -103,6 +108,14 @@ func (r *FileRepository) GetUserStorage(userID string) ([]types.Link, error) {
 
 func (r *FileRepository) Ping() bool {
 	return true
+}
+
+func (r *FileRepository) ReleaseStorage() {
+	log.Println("Storage released")
+	err := r.file.Close()
+	if err != nil && !errors.Is(err, fs.ErrClosed) {
+		log.Fatalf("Failed to release file storage. Error: %v", err.Error())
+	}
 }
 
 // NewFileRepository returns a new FileRepository.
