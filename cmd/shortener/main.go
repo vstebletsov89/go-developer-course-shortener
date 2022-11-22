@@ -6,6 +6,7 @@ import (
 	"go-developer-course-shortener/internal/app/handlers"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
+	"go-developer-course-shortener/internal/app/repository/postgres"
 	"go-developer-course-shortener/internal/configs"
 	"go-developer-course-shortener/internal/worker"
 	"log"
@@ -47,7 +48,7 @@ func main() {
 			log.Fatalf("Failed to connect to database. Error: %v", err.Error())
 		}
 
-		storage, err = repository.NewDBRepository(conn)
+		storage, err = postgres.NewDBRepository(conn)
 		if err != nil {
 			log.Fatalf("Failed to create DB repository. Error: %v", err.Error())
 		}
