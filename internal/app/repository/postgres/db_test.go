@@ -46,7 +46,6 @@ func (sts *StorageTestSuite) SetupTest() {
 }
 
 func (sts *StorageTestSuite) TearDownTest() {
-	sts.TestStorage.ReleaseStorage()
 	sts.container.Close(sts.T())
 }
 
@@ -56,7 +55,6 @@ func TestStorageTestSuite(t *testing.T) {
 		return
 	}
 
-	t.Parallel()
 	suite.Run(t, new(StorageTestSuite))
 }
 
@@ -334,6 +332,77 @@ func (sts *StorageTestSuite) TestDBRepository_GetURL() {
 			}
 			if !reflect.DeepEqual(got, tt.wantURL) {
 				sts.T().Errorf("GetURL() got = %v, want %v", got, tt.wantURL)
+			}
+		})
+	}
+}
+
+func (sts *StorageTestSuite) Test_Negative() {
+	tests := []struct {
+		name      string
+		links     types.BatchLinks
+		shortURLS []string
+		wantRes   bool
+		wantErr   bool
+	}{
+		{
+			name: "negative tests for all methods",
+			links: types.BatchLinks{types.BatchLink{
+				CorrelationID: "neg_id1",
+				ShortURL:      "neg_short1",
+				OriginalURL:   "neg_orig1",
+			},
+				types.BatchLink{
+					CorrelationID: "neg_id2",
+					ShortURL:      "neg_short2",
+					OriginalURL:   "neg_orig2",
+				},
+			},
+			shortURLS: []string{"neg_short1", "neg_short2"},
+			wantRes:   false,
+			wantErr:   true,
+		},
+	}
+
+	sts.TestStorage.ReleaseStorage() // close db connection
+
+	for _, tt := range tests {
+		sts.Run(tt.name, func() {
+			s := sts.TestStorage
+			if res := s.Ping(); res != tt.wantRes {
+				sts.T().Errorf("Ping() error = %v, wantRes %v", res, tt.wantRes)
+			}
+
+			if err := s.SaveURL("", "", ""); (err != nil) != tt.wantErr {
+				sts.T().Errorf("SaveURL() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			_, err := s.GetURL("")
+			if (err != nil) != tt.wantErr {
+				sts.T().Errorf("GetURL() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			_, err = s.GetUserStorage("")
+			if (err != nil) != tt.wantErr {
+				sts.T().Errorf("GetUserStorage() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			_, err = s.GetShortURLByOriginalURL("")
+			if (err != nil) != tt.wantErr {
+				sts.T().Errorf("GetShortURLByOriginalURL() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			_, err = s.SaveBatchURLS("", tt.links)
+			if (err != nil) != tt.wantErr {
+				sts.T().Errorf("SaveBatchURLS() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if err := s.DeleteURLS(context.Background(), "", tt.shortURLS); (err != nil) != tt.wantErr {
+				sts.T().Errorf("DeleteURLS() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

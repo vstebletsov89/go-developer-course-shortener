@@ -17,6 +17,9 @@ type FileRepository struct {
 	file            *os.File
 }
 
+// check that FileRepository implements all required methods
+var _ Repository = (*FileRepository)(nil)
+
 type fileRecord struct {
 	UserID      string `json:"user_id"`
 	ID          string `json:"id"`

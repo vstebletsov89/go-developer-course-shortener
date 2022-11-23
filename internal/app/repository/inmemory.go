@@ -13,6 +13,9 @@ type InMemoryRepository struct {
 	inMemoryUserStorage map[string][]string
 }
 
+// check that InMemoryRepository implements all required methods
+var _ Repository = (*InMemoryRepository)(nil)
+
 func (r *InMemoryRepository) SaveURL(userID string, shortURL string, originalURL string) error {
 	r.inMemoryMap[shortURL] = originalURL
 	r.inMemoryUserStorage[userID] = append(r.inMemoryUserStorage[userID], shortURL)

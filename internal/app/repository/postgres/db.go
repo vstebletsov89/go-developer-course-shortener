@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/types"
 	"log"
 
@@ -21,6 +22,9 @@ const PostgreSQLTable = `create table if not exists urls (
 type DBRepository struct {
 	conn *pgx.Conn
 }
+
+// check that DBRepository implements all required methods
+var _ repository.Repository = (*DBRepository)(nil)
 
 func (r *DBRepository) SaveURL(userID string, shortURL string, originalURL string) error {
 	sql := `INSERT INTO urls (user_id, short_url, original_url) VALUES ($1, $2, $3)`
@@ -43,14 +47,14 @@ func (r *DBRepository) DeleteURLS(ctx context.Context, userID string, shortURLS 
 func (r *DBRepository) SaveBatchURLS(userID string, links types.BatchLinks) (types.ResponseBatch, error) {
 	ctx := context.Background()
 	tx, err := r.conn.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
 	defer func() {
 		if err != nil {
 			tx.Rollback(ctx)
 		}
 	}()
-	if err != nil {
-		return nil, err
-	}
 
 	sql := `INSERT INTO urls (user_id, short_url, original_url) VALUES ($1, $2, $3)`
 
