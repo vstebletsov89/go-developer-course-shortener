@@ -547,21 +547,29 @@ func TestHandlersNegative(t *testing.T) {
 	assert.NoError(t, err2)
 
 	// get stats
-	_, err = testRequest(t, ts, http.MethodGet, "/api/internal/stats", nil)
-	assert.Equal(t, "GetInternalStats error\n", string(err))
+	resp, err = testRequest(t, ts, http.MethodGet, "/api/internal/stats", nil)
+	assert.Equal(t, "GetInternalStats error\n", err)
+	err2 = resp.Body.Close()
+	assert.NoError(t, err2)
 
 	// test simple save
 	originalURL := "https://github.com/test_repo1"
-	_, err = testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-	assert.Equal(t, "SaveURL error\n", string(err))
+	resp, err = testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
+	assert.Equal(t, "SaveURL error\n", err)
+	err2 = resp.Body.Close()
+	assert.NoError(t, err2)
 
 	// test simple get
-	_, err = testRequest(t, ts, http.MethodGet, "/AAAAA", nil)
-	assert.Equal(t, "ID not found\n", string(err))
+	resp, err = testRequest(t, ts, http.MethodGet, "/AAAAA", nil)
+	assert.Equal(t, "ID not found\n", err)
+	err2 = resp.Body.Close()
+	assert.NoError(t, err2)
 
 	// /api/shorten
-	_, err = testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
-	assert.Equal(t, "SaveURL error\n", string(err))
+	resp, err = testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
+	assert.Equal(t, "SaveURL error\n", err)
+	err2 = resp.Body.Close()
+	assert.NoError(t, err2)
 
 	// /api/shorten/batch
 
@@ -580,7 +588,7 @@ func TestHandlersNegative(t *testing.T) {
 
 	j, _ := json.Marshal(links)
 	resp, err = testRequest(t, ts, http.MethodPost, "/api/shorten/batch", bytes.NewBufferString(string(j)))
-	assert.Equal(t, "SaveBatchURLS error\n", string(err))
+	assert.Equal(t, "SaveBatchURLS error\n", err)
 	err2 = resp.Body.Close()
 	assert.NoError(t, err2)
 
