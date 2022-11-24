@@ -521,6 +521,7 @@ func TestHandlerStatsMemoryStorage(t *testing.T) {
 	// get stats
 	resp, body := testRequest(t, ts, http.MethodGet, "/api/internal/stats", nil)
 	err = resp.Body.Close()
+	assert.NoError(t, err)
 	var response types.ResponseStatsJSON
 	err = json.Unmarshal([]byte(body), &response)
 	assert.NoError(t, err)
@@ -541,13 +542,13 @@ func TestHandlersNegative(t *testing.T) {
 	defer ts.Close()
 
 	// test ping
-	resp, err := testRequest(t, ts, http.MethodGet, "/ping", nil)
+	resp, _ := testRequest(t, ts, http.MethodGet, "/ping", nil)
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	err2 := resp.Body.Close()
 	assert.NoError(t, err2)
 
 	// get stats
-	resp, err = testRequest(t, ts, http.MethodGet, "/api/internal/stats", nil)
+	resp, err := testRequest(t, ts, http.MethodGet, "/api/internal/stats", nil)
 	assert.Equal(t, "GetInternalStats error\n", err)
 	err2 = resp.Body.Close()
 	assert.NoError(t, err2)
@@ -593,7 +594,7 @@ func TestHandlersNegative(t *testing.T) {
 	assert.NoError(t, err2)
 
 	// /api/user/urls (get)
-	resp, err = testRequest(t, ts, http.MethodGet, "/api/user/urls", nil)
+	resp, _ = testRequest(t, ts, http.MethodGet, "/api/user/urls", nil)
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 	err2 = resp.Body.Close()
 	assert.NoError(t, err2)
@@ -631,6 +632,7 @@ func TestHandlerStatsFileStorage(t *testing.T) {
 	// get stats
 	resp, body := testRequest(t, ts, http.MethodGet, "/api/internal/stats", nil)
 	err = resp.Body.Close()
+	assert.NoError(t, err)
 	var response types.ResponseStatsJSON
 	err = json.Unmarshal([]byte(body), &response)
 	assert.NoError(t, err)

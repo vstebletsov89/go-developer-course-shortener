@@ -34,6 +34,7 @@ func (sts *StorageTestSuite) SetupTest() {
 	sts.T().Setenv("DATABASE_DSN", dsn)
 
 	config, err := configs.ReadConfig()
+	require.NoError(sts.T(), err)
 
 	conn, err := pgx.Connect(context.Background(), config.DatabaseDsn)
 	require.NoError(sts.T(), err)
@@ -50,10 +51,12 @@ func (sts *StorageTestSuite) TearDownTest() {
 }
 
 func TestStorageTestSuite(t *testing.T) {
-	t.Skip() // skip docker tests for git
-	return
-
-	suite.Run(t, new(StorageTestSuite))
+	if false {
+		// skip docker tests for git
+		suite.Run(t, new(StorageTestSuite))
+	} else {
+		t.Skip()
+	}
 }
 
 func (sts *StorageTestSuite) TestDBRepository_GetInternalStats() {
