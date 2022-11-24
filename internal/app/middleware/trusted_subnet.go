@@ -32,7 +32,7 @@ func TrustedSubnetHandle(trustedSubnet string) func(next http.Handler) http.Hand
 			}
 			// check user ip is located in trusted subnet
 			if !subnet.Contains(userIP) {
-				http.Error(w, err.Error(), http.StatusForbidden)
+				http.Error(w, "ip is not trusted", http.StatusForbidden)
 				return
 			}
 			next.ServeHTTP(w, r)

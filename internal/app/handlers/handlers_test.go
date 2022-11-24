@@ -543,6 +543,8 @@ func TestHandlersNegative(t *testing.T) {
 	// test ping
 	resp, err := testRequest(t, ts, http.MethodGet, "/ping", nil)
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	err2 := resp.Body.Close()
+	assert.NoError(t, err2)
 
 	// get stats
 	_, err = testRequest(t, ts, http.MethodGet, "/api/internal/stats", nil)
@@ -558,7 +560,7 @@ func TestHandlersNegative(t *testing.T) {
 	assert.Equal(t, "ID not found\n", string(err))
 
 	// /api/shorten
-	resp, err = testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
+	_, err = testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
 	assert.Equal(t, "SaveURL error\n", string(err))
 
 	// /api/shorten/batch
@@ -579,10 +581,14 @@ func TestHandlersNegative(t *testing.T) {
 	j, _ := json.Marshal(links)
 	resp, err = testRequest(t, ts, http.MethodPost, "/api/shorten/batch", bytes.NewBufferString(string(j)))
 	assert.Equal(t, "SaveBatchURLS error\n", string(err))
+	err2 = resp.Body.Close()
+	assert.NoError(t, err2)
 
 	// /api/user/urls (get)
 	resp, err = testRequest(t, ts, http.MethodGet, "/api/user/urls", nil)
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	err2 = resp.Body.Close()
+	assert.NoError(t, err2)
 }
 
 func TestHandlerStatsFileStorage(t *testing.T) {
