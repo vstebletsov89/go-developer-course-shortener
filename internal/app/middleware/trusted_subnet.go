@@ -16,6 +16,7 @@ func TrustedSubnetHandle(trustedSubnet string) func(next http.Handler) http.Hand
 			log.Printf("r.RequestURI: %v", r.RequestURI)
 			if r.RequestURI != "/api/internal/stats" {
 				next.ServeHTTP(w, r)
+				return
 			}
 			// get user ip
 			userIP, err := resolveIP(r)
