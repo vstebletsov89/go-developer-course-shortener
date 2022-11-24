@@ -16,6 +16,10 @@ type InMemoryRepository struct {
 // check that InMemoryRepository implements all required methods
 var _ Repository = (*InMemoryRepository)(nil)
 
+func (r *InMemoryRepository) GetInternalStats() (int, int, error) {
+	return len(r.inMemoryMap), len(r.inMemoryUserStorage), nil
+}
+
 func (r *InMemoryRepository) SaveURL(userID string, shortURL string, originalURL string) error {
 	r.inMemoryMap[shortURL] = originalURL
 	r.inMemoryUserStorage[userID] = append(r.inMemoryUserStorage[userID], shortURL)

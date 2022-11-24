@@ -288,6 +288,27 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandlerStats implements getting stats of the repository.
+func (h *Handler) HandlerStats(w http.ResponseWriter, r *http.Request) {
+	urls, users, err := h.storage.GetInternalStats()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := types.ResponseStatsJSON{
+		URLs:  urls,
+		Users: users,
+	}
+	log.Printf("Response ResponseStatsJSON: %+v", response)
+
+	w.Header().Set(ContentType, ContentValueJSON)
+	if err = json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
 // HandlerPing verifies current status of repository.
 func (h *Handler) HandlerPing(w http.ResponseWriter, r *http.Request) {
 	if !h.storage.Ping() {

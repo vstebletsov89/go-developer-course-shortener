@@ -123,6 +123,7 @@ func service(job chan worker.Job, config *configs.Config, storage repository.Rep
 	r.Get("/api/user/urls", handler.HandlerUserStorageGET)
 	r.Get("/ping", handler.HandlerPing)
 	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(job))
+	r.Get("/api/internal/stats", handler.HandlerStats)
 
 	return r
 }

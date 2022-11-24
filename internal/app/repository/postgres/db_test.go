@@ -58,7 +58,81 @@ func TestStorageTestSuite(t *testing.T) {
 	suite.Run(t, new(StorageTestSuite))
 }
 
-func (sts *StorageTestSuite) Test_Ping() {
+func (sts *StorageTestSuite) TestDBRepository_GetInternalStats() {
+	tests := []struct {
+		name      string
+		userID1   string
+		userID2   string
+		links1    types.BatchLinks
+		links2    types.BatchLinks
+		wantUrls  int
+		wantUsers int
+		wantErr   bool
+	}{
+		{
+			name:    "positive test",
+			userID1: "gis_user1",
+			userID2: "gis_user2",
+			links1: types.BatchLinks{types.BatchLink{
+				CorrelationID: "gis_id1",
+				ShortURL:      "gis_short1",
+				OriginalURL:   "gis_orig1",
+			},
+				types.BatchLink{
+					CorrelationID: "gis_id2",
+					ShortURL:      "gis_short2",
+					OriginalURL:   "gis_orig2",
+				},
+			},
+			links2: types.BatchLinks{types.BatchLink{
+				CorrelationID: "gis_id3",
+				ShortURL:      "gis_short3",
+				OriginalURL:   "gis_orig3",
+			},
+				types.BatchLink{
+					CorrelationID: "gis_id4",
+					ShortURL:      "gis_short4",
+					OriginalURL:   "gis_orig4",
+				},
+			},
+			wantUrls:  4,
+			wantUsers: 2,
+			wantErr:   false,
+		},
+	}
+	for _, tt := range tests {
+		sts.Run(tt.name, func() {
+			s := sts.TestStorage
+
+			_, err := s.SaveBatchURLS(tt.userID1, tt.links1)
+			if (err != nil) != tt.wantErr {
+				sts.T().Errorf("SaveBatchURLS() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			_, err = s.SaveBatchURLS(tt.userID2, tt.links2)
+			if (err != nil) != tt.wantErr {
+				sts.T().Errorf("SaveBatchURLS() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			urls, users, err := s.GetInternalStats()
+			if (err != nil) != tt.wantErr {
+				sts.T().Errorf("GetInternalStats() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if urls != tt.wantUrls {
+				sts.T().Errorf("GetInternalStats() got = %v, want %v", urls, tt.wantUrls)
+			}
+			if users != tt.wantUsers {
+				sts.T().Errorf("GetInternalStats() got1 = %v, want %v", users, tt.wantUsers)
+			}
+
+		})
+	}
+}
+
+func (sts *StorageTestSuite) TestDBRepository_Ping() {
 	tests := []struct {
 		name    string
 		wantRes bool
@@ -337,7 +411,7 @@ func (sts *StorageTestSuite) TestDBRepository_GetURL() {
 	}
 }
 
-func (sts *StorageTestSuite) Test_Negative() {
+func (sts *StorageTestSuite) TestDBRepository_Negative() {
 	tests := []struct {
 		name      string
 		links     types.BatchLinks
@@ -371,10 +445,12 @@ func (sts *StorageTestSuite) Test_Negative() {
 			s := sts.TestStorage
 			if res := s.Ping(); res != tt.wantRes {
 				sts.T().Errorf("Ping() error = %v, wantRes %v", res, tt.wantRes)
+				return
 			}
 
 			if err := s.SaveURL("", "", ""); (err != nil) != tt.wantErr {
 				sts.T().Errorf("SaveURL() error = %v, wantErr %v", err, tt.wantErr)
+				return
 			}
 
 			_, err := s.GetURL("")
@@ -403,6 +479,13 @@ func (sts *StorageTestSuite) Test_Negative() {
 
 			if err := s.DeleteURLS(context.Background(), "", tt.shortURLS); (err != nil) != tt.wantErr {
 				sts.T().Errorf("DeleteURLS() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			_, _, err = s.GetInternalStats()
+			if (err != nil) != tt.wantErr {
+				sts.T().Errorf("GetInternalStats() error = %v, wantErr %v", err, tt.wantErr)
+				return
 			}
 		})
 	}

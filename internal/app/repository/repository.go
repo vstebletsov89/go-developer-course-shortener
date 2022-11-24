@@ -22,6 +22,8 @@ type Repository interface {
 	Ping() bool
 	// DeleteURLS deletes list of short urls for current user id.
 	DeleteURLS(ctx context.Context, userID string, shortURLS []string) error
+	// GetInternalStats returns internal stats for repository.
+	GetInternalStats() (int, int, error)
 	// ReleaseStorage releases current storage.
 	ReleaseStorage()
 }

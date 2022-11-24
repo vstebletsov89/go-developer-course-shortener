@@ -26,6 +26,25 @@ type DBRepository struct {
 // check that DBRepository implements all required methods
 var _ repository.Repository = (*DBRepository)(nil)
 
+func (r *DBRepository) GetInternalStats() (int, int, error) {
+	var urls int
+	var users int
+
+	row := r.conn.QueryRow(context.Background(), `SELECT COUNT(*) FROM urls`)
+	err := row.Scan(&urls)
+	if err != nil {
+		return urls, users, err
+	}
+
+	row = r.conn.QueryRow(context.Background(), `SELECT COUNT(DISTINCT(user_id)) FROM urls`)
+	err = row.Scan(&users)
+	if err != nil {
+		return urls, users, err
+	}
+
+	return urls, users, nil
+}
+
 func (r *DBRepository) SaveURL(userID string, shortURL string, originalURL string) error {
 	sql := `INSERT INTO urls (user_id, short_url, original_url) VALUES ($1, $2, $3)`
 	_, err := r.conn.Exec(context.Background(), sql, userID, shortURL, originalURL)

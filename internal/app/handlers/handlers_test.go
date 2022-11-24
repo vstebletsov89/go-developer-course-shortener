@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
+	"go-developer-course-shortener/internal/app/repository/mocks"
 	"go-developer-course-shortener/internal/app/types"
 	"go-developer-course-shortener/internal/configs"
 	"go-developer-course-shortener/internal/worker"
@@ -69,9 +70,13 @@ func AuthHandleMock(next http.Handler) http.Handler {
 
 func NewRouter(config *configs.Config, auth ...bool) chi.Router {
 	var storage repository.Repository
-	if config.FileStoragePath != "" {
+	switch {
+	case config.DatabaseDsn != "":
+		// mock repository to test negative scenarios
+		storage = mocks.NewMockRepository()
+	case config.FileStoragePath != "":
 		storage = repository.NewFileRepository(config.FileStoragePath)
-	} else {
+	default:
 		storage = repository.NewInMemoryRepository()
 	}
 	handler := NewHTTPHandler(config, storage)
@@ -97,6 +102,7 @@ func NewRouter(config *configs.Config, auth ...bool) chi.Router {
 	r.Get("/api/user/urls", handler.HandlerUserStorageGET)
 	r.Get("/ping", handler.HandlerPing)
 	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(jobs))
+	r.Get("/api/internal/stats", handler.HandlerStats)
 
 	return r
 }
@@ -487,6 +493,137 @@ func TestBothHandlersFileStorageTwoRecords(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "https://github.com/test_repo1", resp.Header.Get("Location"))
 	assert.Equal(t, http.StatusTemporaryRedirect, resp.StatusCode)
+}
+
+func TestHandlerStatsMemoryStorage(t *testing.T) {
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: "",
+	}
+	r := NewRouter(config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// prepare short urls
+	originalURL := "https://github.com/test_repo1"
+	resp, _ := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
+	err := resp.Body.Close()
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	originalURL = "https://github.com/test_repo2"
+	resp, _ = testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
+	err = resp.Body.Close()
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	// get stats
+	resp, body := testRequest(t, ts, http.MethodGet, "/api/internal/stats", nil)
+	err = resp.Body.Close()
+	var response types.ResponseStatsJSON
+	err = json.Unmarshal([]byte(body), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, response.URLs, 2)
+	assert.Equal(t, response.Users, 1)
+
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+}
+
+func TestHandlersNegative(t *testing.T) {
+	config := &configs.Config{
+		ServerAddress: "localhost:8080",
+		BaseURL:       "http://localhost:8080",
+		DatabaseDsn:   "mock_repo",
+	}
+	r := NewRouter(config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// test ping
+	resp, err := testRequest(t, ts, http.MethodGet, "/ping", nil)
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+	// get stats
+	_, err = testRequest(t, ts, http.MethodGet, "/api/internal/stats", nil)
+	assert.Equal(t, "GetInternalStats error\n", string(err))
+
+	// test simple save
+	originalURL := "https://github.com/test_repo1"
+	_, err = testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
+	assert.Equal(t, "SaveURL error\n", string(err))
+
+	// test simple get
+	_, err = testRequest(t, ts, http.MethodGet, "/AAAAA", nil)
+	assert.Equal(t, "ID not found\n", string(err))
+
+	// /api/shorten
+	resp, err = testRequest(t, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
+	assert.Equal(t, "SaveURL error\n", string(err))
+
+	// /api/shorten/batch
+
+	links := types.BatchLinks{
+		types.BatchLink{
+			CorrelationID: "neg_id1",
+			ShortURL:      "neg_short1",
+			OriginalURL:   "neg_orig1",
+		},
+		types.BatchLink{
+			CorrelationID: "neg_id2",
+			ShortURL:      "neg_short2",
+			OriginalURL:   "neg_orig2",
+		},
+	}
+
+	j, _ := json.Marshal(links)
+	resp, err = testRequest(t, ts, http.MethodPost, "/api/shorten/batch", bytes.NewBufferString(string(j)))
+	assert.Equal(t, "SaveBatchURLS error\n", string(err))
+
+	// /api/user/urls (get)
+	resp, err = testRequest(t, ts, http.MethodGet, "/api/user/urls", nil)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+}
+
+func TestHandlerStatsFileStorage(t *testing.T) {
+	temp, storagePath := createFileRepository(t)
+	defer func() {
+		err := os.RemoveAll(temp)
+		assert.NoError(t, err)
+	}()
+
+	config := &configs.Config{
+		ServerAddress:   "localhost:8080",
+		BaseURL:         "http://localhost:8080",
+		FileStoragePath: storagePath,
+	}
+	r := NewRouter(config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	// prepare short urls
+	originalURL := "https://github.com/test_repo1"
+	resp, _ := testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
+	err := resp.Body.Close()
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	originalURL = "https://github.com/test_repo2"
+	resp, _ = testRequest(t, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
+	err = resp.Body.Close()
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	// get stats
+	resp, body := testRequest(t, ts, http.MethodGet, "/api/internal/stats", nil)
+	err = resp.Body.Close()
+	var response types.ResponseStatsJSON
+	err = json.Unmarshal([]byte(body), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, response.URLs, 2)
+	assert.Equal(t, response.Users, 1)
+
+	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 }
 
 func TestBothHandlersMemoryStorage(t *testing.T) {
