@@ -21,6 +21,7 @@ type Config struct {
 	DatabaseDsn     string `env:"DATABASE_DSN" envDefault:"" json:"database_dsn"`
 	EnableHTTPS     bool   `env:"ENABLE_HTTPS" envDefault:"false" json:"enable_https"`
 	Config          string `env:"CONFIG" envDefault:""`
+	TrustedSubnet   string `env:"TRUSTED_SUBNET" envDefault:"" json:"trusted_subnet"`
 }
 
 var once sync.Once
@@ -33,6 +34,7 @@ func (c *Config) readCommandLineArgs() {
 		flag.StringVar(&c.DatabaseDsn, "d", c.DatabaseDsn, "database dsn")
 		flag.BoolVar(&c.EnableHTTPS, "s", c.EnableHTTPS, "enable https mode")
 		flag.StringVar(&c.Config, "c", c.Config, "json config path")
+		flag.StringVar(&c.TrustedSubnet, "t", c.TrustedSubnet, "enable trusted subnet mode")
 		flag.Parse()
 	})
 }
@@ -77,6 +79,9 @@ func ReadConfig() (*Config, error) {
 		}
 		if cfg.DatabaseDsn == "" && fileConfig.DatabaseDsn != "" {
 			cfg.DatabaseDsn = fileConfig.DatabaseDsn
+		}
+		if cfg.TrustedSubnet == "" && fileConfig.TrustedSubnet != "" {
+			cfg.TrustedSubnet = fileConfig.TrustedSubnet
 		}
 		if !cfg.EnableHTTPS && fileConfig.EnableHTTPS {
 			cfg.EnableHTTPS = fileConfig.EnableHTTPS

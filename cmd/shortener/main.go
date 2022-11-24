@@ -113,7 +113,7 @@ func service(job chan worker.Job, config *configs.Config, storage repository.Rep
 	handler := handlers.NewHTTPHandler(config, storage)
 
 	r := chi.NewRouter()
-	r.Use(middleware.GzipHandle, middleware.AuthHandle)
+	r.Use(middleware.GzipHandle, middleware.AuthHandle, middleware.TrustedSubnetHandle(config.TrustedSubnet))
 
 	// routing
 	r.Post("/", handler.HandlerPOST)

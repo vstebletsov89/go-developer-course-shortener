@@ -20,20 +20,21 @@ func TestReadConfig(t *testing.T) {
 	}{
 		{
 			name:         "read config with defaults",
-			want:         &Config{ServerAddress: "localhost:8080", BaseURL: "http://localhost:8080", FileStoragePath: "", DatabaseDsn: "", EnableHTTPS: false},
+			want:         &Config{ServerAddress: "localhost:8080", BaseURL: "http://localhost:8080", FileStoragePath: "", DatabaseDsn: "", EnableHTTPS: false, TrustedSubnet: ""},
 			jsonConfig:   nil,
 			deleteConfig: false,
 			wantErr:      false,
 		},
 		{
 			name: "read config from json config",
-			want: &Config{ServerAddress: "host:9090", BaseURL: "https://baseurl", FileStoragePath: "/path/to/file.db", DatabaseDsn: "databaseConnectionString", EnableHTTPS: true},
+			want: &Config{ServerAddress: "host:9090", BaseURL: "https://baseurl", FileStoragePath: "/path/to/file.db", DatabaseDsn: "databaseConnectionString", EnableHTTPS: true, TrustedSubnet: "192.168.0.15/24"},
 			jsonConfig: map[string]interface{}{
 				"server_address":    "host:9090",
 				"base_url":          "https://baseurl",
 				"file_storage_path": "/path/to/file.db",
 				"database_dsn":      "databaseConnectionString",
 				"enable_https":      true,
+				"trusted_subnet":    "192.168.0.15/24",
 			},
 			deleteConfig: false,
 			wantErr:      false,
@@ -90,7 +91,8 @@ func TestReadConfig(t *testing.T) {
 			}
 
 			if !tt.wantErr {
-				testConfig := &Config{ServerAddress: got.ServerAddress, BaseURL: got.BaseURL, FileStoragePath: got.FileStoragePath, DatabaseDsn: got.DatabaseDsn, EnableHTTPS: got.EnableHTTPS}
+				testConfig := &Config{ServerAddress: got.ServerAddress, BaseURL: got.BaseURL, FileStoragePath: got.FileStoragePath, DatabaseDsn: got.DatabaseDsn, EnableHTTPS: got.EnableHTTPS,
+					TrustedSubnet: got.TrustedSubnet}
 				if !reflect.DeepEqual(testConfig, tt.want) {
 					t.Errorf("ReadConfig() got = %v, want %v", testConfig, tt.want)
 				}
