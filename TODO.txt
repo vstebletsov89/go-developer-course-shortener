@@ -1,0 +1,464 @@
+Инкремент 24
+Задание для трека «Сервис сокращения URL»
+Добавьте возможность делать запросы к вашему серверу по протоколу gRPC.
+Все хендлеры должны быть доступны по gRPC и функционировать настолько идентично уже имеющимся,
+ насколько это возможно в рамках протокола. Поддержите все возможности конфигурации gRPC-сервера
+  аналогично конфигурациям HTTP-сервера.
+Совет: попробуйте сделать HTTP- и gRPC-хендлеры фасадами к общему коду с бизнес-логикой.
+
+----------------------------------------------------------------------------------------------------
+
+Разработка gRPC-сервера и клиента
+В этом уроке расскажем, как реализовать gRPC-сервер и gRPC-клиент.
+Обе программы будут использовать файлы demo_grpc.pb.go и demo.pb.go,
+созданные из demo.proto в прошлом уроке. Кроме них, в исходном коде вы встретите
+функции пакета gRPC, который также нужно импортировать.
+
+Разработка gRPC-сервера
+При разработке сервера надо реализовать все интерфейсы сервиса, описанные в proto-файле.
+Создадим поддиректорию server с файлом main.go и опишем там тип UsersServer:
+
+import (
+    // ...
+    "google.golang.org/grpc"
+
+    // импортируем пакет со сгенерированными protobuf-файлами
+    pb "demo/proto"
+)
+
+// UsersServer поддерживает все необходимые методы сервера.
+type UsersServer struct {
+    // нужно встраивать тип pb.Unimplemented<TypeName>
+    // для совместимости с будущими версиями
+    pb.UnimplementedUsersServer
+
+    // используем sync.Map для хранения пользователей
+    users sync.Map
+}
+
+Для типа UsersServer нужно реализовать четыре метода:
+AddUser,
+ListUsers,
+GetUser,
+DelUser.
+Метод AddUser для добавления пользователя можно реализовать так:
+
+// AddUser реализует интерфейс добавления пользователя.
+func (s *UsersServer) AddUser(ctx context.Context, in *pb.AddUserRequest) (*pb.AddUserResponse, error) {
+    var response pb.AddUserResponse
+
+    if _, ok := s.users.Load(in.User.Email); ok {
+        response.Error = fmt.Sprintf("Пользователь с email %s уже существует", in.User.Email)
+    } else {
+        s.users.Store(in.User.Email, in.User)
+    }
+    return &response, nil
+}
+
+// ListUsers реализует интерфейс получения списка пользователей.
+func (s *UsersServer) ListUsers(ctx context.Context, in *pb.ListUsersRequest) (*pb.ListUsersResponse, error) {
+    var list []string
+
+    s.users.Range(func(key, _ interface{}) bool {
+        list = append(list, key.(string))
+        return true
+    })
+    // сортируем слайс из email
+    sort.Strings(list)
+
+    offset := int(in.Offset)
+    end := int(in.Offset + in.Limit)
+    if end > len(list) {
+        end = len(list)
+    }
+    if offset >= end {
+        offset = 0
+        end = 0
+    }
+    response := pb.ListUsersResponse{
+        Count:  int32(len(list)),
+        Emails: list[offset:end],
+    }
+    return &response, nil
+}
+
+// GetUser реализует интерфейс получения информации о пользователе.
+func (s *UsersServer) GetUser(ctx context.Context, in *pb.GetUserRequest) (*pb.GetUserResponse, error) {
+    var response pb.GetUserResponse
+
+    if user, ok := s.users.Load(in.Email); ok {
+        response.User = user.(*pb.User)
+    } else {
+        response.Error = fmt.Sprintf("Пользователь с email %s не найден", in.Email)
+    }
+    return &response, nil
+}
+
+// DelUser реализует интерфейс удаления информации о пользователе.
+func (s *UsersServer) DelUser(ctx context.Context, in *pb.DelUserRequest) (*pb.DelUserResponse, error) {
+    var response pb.DelUserResponse
+
+    if _, ok := s.users.LoadAndDelete(in.Email); !ok {
+        response.Error = fmt.Sprintf("Пользователь с email %s не найден", in.Email)
+    }
+    return &response, nil
+}
+
+После того как были реализованы все необходимые интерфейсы, можно приступать к созданию функции main.
+ Она запустит gRPC-сервер.
+
+Вот алгоритм по шагам:
+
+При вызове net.Listen указать порт, который будет прослушивать сервер.
+Создать экземпляр gRPC-сервера функцией grpc.NewServer().
+Зарегистрировать созданный сервис UsersServer на сервере gRPC.
+Вызвать Serve() для начала работы сервера. Он будет слушать указанный порт, пока процесс не прекратит работу.
+
+func main() {
+    // определяем порт для сервера
+    listen, err := net.Listen("tcp", ":3200")
+    if err != nil {
+        log.Fatal(err)
+    }
+    // создаём gRPC-сервер без зарегистрированной службы
+    s := grpc.NewServer()
+    // регистрируем сервис
+    pb.RegisterUsersServer(s, &UsersServer{})
+
+    fmt.Println("Сервер gRPC начал работу")
+    // получаем запрос gRPC
+    if err := s.Serve(listen); err != nil {
+        log.Fatal(err)
+    }
+}
+
+Как видите, код запуска gRPC-сервера совсем маленький.
+ Гораздо больше усилий тратится на реализацию интерфейсов, описанных в proto-файле.
+  Если требуется добавить новый функционал, нужно описать protobuf-интерфейс и реализовать
+  соответствующий метод.
+Сейчас готовый сервер можно скомпилировать и запустить. Чтобы проверить его работу,
+ напишем программу-клиент, который будет отправлять серверу сообщения.
+
+Разработка gRPC-клиента
+Покажем практический пример реализации gRPC-клиента. Возьмём такой сценарий:
+создадим несколько пользователей,
+получим информацию о пользователе,
+удалим пользователя,
+получим список всех email.
+Таким образом вызовем все функции сервиса и проверим его работу.
+Сначала определим главную функцию для подключения к серверу:
+
+import (
+    // ...
+    pb "demo/proto"
+
+    "google.golang.org/grpc"
+    "google.golang.org/grpc/credentials/insecure"
+)
+
+func main() {
+    // устанавливаем соединение с сервером
+    conn, err := grpc.Dial(":3200", grpc.WithTransportCredentials(insecure.NewCredentials()))
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer conn.Close()
+    // получаем переменную интерфейсного типа UsersClient,
+    // через которую будем отправлять сообщения
+    c := pb.NewUsersClient(conn)
+
+    // функция, в которой будем отправлять сообщения
+    TestUsers(c)
+}
+
+Соединение с сервером устанавливается при вызове функции grpc.Dial().
+ В первом параметре указывается адрес сервера, далее перечисляются опциональные параметры.
+Функция pb.NewUsersClient(conn) возвращает переменную интерфейсного типа UsersClient,
+ для которого сгенерированы методы с соответствующими запросами из proto-файла.
+Теперь протестируем работу клиента и сервера:
+
+func TestUsers(c pb.UsersClient) {
+    // набор тестовых данных
+    users := []*pb.User{
+        {Name: "Сергей", Email: "serge@example.com", Sex: pb.User_MALE},
+        {Name: "Света", Email: "sveta@example.com", Sex: pb.User_FEMALE},
+        {Name: "Денис", Email: "den@example.com", Sex: pb.User_MALE},
+        // при добавлении этой записи должна вернуться ошибка:
+        // пользователь с email sveta@example.com уже существует
+        {Name: "Sveta", Email: "sveta@example.com", Sex: pb.User_FEMALE},
+    }
+    for _, user := range users {
+        // добавляем пользователей
+        resp, err := c.AddUser(context.Background(), &pb.AddUserRequest{
+            User: user,
+        })
+        if err != nil {
+            log.Fatal(err)
+        }
+        if resp.Error != "" {
+            fmt.Println(resp.Error)
+        }
+    }
+    // удаляем одного из пользователей
+    resp, err := c.DelUser(context.Background(), &pb.DelUserRequest{
+        Email: "serge@example.com",
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    if resp.Error != "" {
+        fmt.Println(resp.Error)
+    }
+
+    // получаем информацию о пользователях
+    // во втором случае должна вернуться ошибка:
+    // пользователь с email serge@example.com не найден
+    for _, userEmail := range []string{"sveta@example.com", "serge@example.com"} {
+        resp, err := c.GetUser(context.Background(), &pb.GetUserRequest{
+            Email: userEmail,
+        })
+        if err != nil {
+            log.Fatal(err)
+        }
+        if resp.Error == "" {
+            fmt.Println(resp.User)
+        } else {
+            fmt.Println(resp.Error)
+        }
+    }
+
+    // получаем список email пользователей
+    emails, err := c.ListUsers(context.Background(), &pb.ListUsersRequest{
+        Offset: 0,
+        Limit:  100,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println(emails.Count, emails.Emails)
+}
+
+Итак, все методы для работы с пользователями вызваны. Обратите внимание, что
+ в параметре контекста везде передаётся context.Background(). Это сделано для упрощения примера
+  — при необходимости можно определять свой контекст.
+
+  Теперь запустите сервер командой go run server/main.go.
+  После этого откройте новый терминал и запустите клиент командой go run client/main.go.
+
+  Коды ошибок
+  Есть список предопределённых кодов ошибок{target="_blank}, которые могут возвращать сервер и клиент. Чтобы создать ошибку со статус-кодом, нужно использовать пакет grpc/status. Вот некоторые функции этого пакета:
+  Code(err error) codes.Code — возвращает код ошибки, а при отсутствии ошибки код равен codes.OK;
+  Error(c codes.Code, msg string) error — создаёт ошибку с указанным кодом и текстом;
+  Errorf(c codes.Code, format string, a ...interface{}) error — создаёт ошибку, используя строку форматирования;
+  FromError(err error) (s *Status, ok bool) — возвращает указатель на переменную типа Status, которая содержит код и текст ошибки.
+  Посмотрите, как можно переделать рассмотренный выше метод GetUser, чтобы он возвращал ошибку с кодом статуса:
+
+  func (s *UsersServer) GetUser(ctx context.Context, in *pb.GetUserRequest) (*pb.GetUserResponse, error) {
+      var response pb.GetUserResponse
+
+      if user, ok := s.users.Load(in.Email); ok {
+          response.User = user.(*pb.User)
+      } else {
+          return nil, status.Errorf(codes.NotFound, `Пользователь с email %s не найден`, in.Email)
+      }
+      return &response, nil
+  }
+
+  resp, err := c.GetUser(context.Background(), &pb.GetUserRequest{
+      Email: userEmail,
+  })
+  if err != nil {
+      if e, ok := status.FromError(err); ok {
+          if e.Code() == codes.NotFound {
+              // выведет, что пользователь не найден
+              fmt.Println(`NOT FOUND`, e.Message())
+          } else {
+              // в остальных случаях выводим код ошибки в виде строки и сообщение
+              fmt.Println(e.Code(), e.Message())
+          }
+      } else {
+          fmt.Printf("Не получилось распарсить ошибку %v", err)
+      }
+      // ...
+  }
+
+Так как при вызове gRPC-метода первым параметром передаётся контекст,
+ можно использовать его возможности для ограничения времени выполнения запроса:
+
+ // если запрос будет выполняться дольше 200 миллисекунд, то вернётся ошибка
+ // с кодом codes.DeadlineExceeded и сообщением context deadline exceeded
+ ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+ defer cancel()
+ resp, err := c.GetUser(ctx, &pb.GetUserRequest{
+     Email: userEmail,
+ })
+
+ Метаданные
+ Предположим, что вместе с gRPC-запросами нужно передавать дополнительные данные — подобно передаче заголовков в HTTP-запросах. Инструмент для решения этой задачи есть в пакете grpc/metadata.
+ Метаданные хранятся в виде мапы, в которой ключу соответствует не одно значение, а слайс строк. Для передачи и получения метаданных используется context.Context. Тип MD служит для хранения метаданных. Перечислим основные функции пакета:
+ NewOutgoingContext(ctx context.Context, md MD) context.Context — добавляет метаданные к контексту при отправке запроса;
+ FromIncomingContext(ctx context.Context) (MD, bool) — извлекает метаданные из контекста полученного запроса;
+ New(m map[string]string) MD — создаёт переменную типа MD из указанной мапы;
+ Pairs(kv ...string) MD — создаёт метаданные из переданных пар «ключ-значение»;
+ (md MD) Get(k string) []string — возвращает слайс значений для указанного ключа;
+ (md MD) Set(k string, vals ...string) — присваивает ключу слайс из указанных значений.
+ Вот как может происходить отправка метаданных:
+
+ md := metadata.New(map[string]string{"token":  "12345"})
+ ctx := metadata.NewOutgoingContext(context.Background(), md)
+ resp, err := c.GetUser(ctx, &pb.GetUserRequest{
+     Email: userEmail,
+ })
+
+При обработке запроса можно легко получить метаданные из контекста:
+
+ func (s *UsersServer) GetUser(ctx context.Context, in *pb.GetUserRequest) (*pb.GetUserResponse, error) {
+     var token string
+
+     md, ok := metadata.FromIncomingContext(ctx)
+     if ok {
+        values := md.Get("token")
+        if len(values) > 0 {
+             // ключ содержит слайс строк, получаем первую строку
+             token = values[0]
+        }
+     }
+     // ...
+ }
+
+Interceptors
+Требования к gRPC-клиенту или серверу могут не ограничиваться только приёмом и отправкой сообщений. На практике часто нужно добавлять логирование, трассировку, авторизацию/аутентификацию, кеширование и т. д. Если при разработке HTTP-сервера для этих целей используется middleware, то в gRPC эти задачи реализуются с помощью перехватчиков (interceptors). Перехватчики можно создать как для клиента, так и для сервера.
+Также gRPC-запросы делятся на одиночные и потоковые, поэтому перехватчики бывают двух видов: UnaryInterceptor (перехватывает унарные запросы) и StreamInterceptor (перехватывает потоковые запросы).
+Итого есть четыре типа перехватчиков:
+UnaryClientInterceptor перехватывает выполнение унарного gRPC на клиенте;
+UnaryServerInterceptor перехватывает выполнение унарного gRPC на сервере;
+StreamClientInterceptor перехватывает выполнение потокового gRPC на клиенте;
+StreamServerInterceptor перехватывает выполнение потокового gRPC на сервере.
+
+func handle(ctx context.Context, method string, req, reply interface{},
+    cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error
+
+    Здесь указаны следующие параметры:
+    ctx context.Context — контекст, например для прекращения работы по тайм-ауту;
+    method string — имя вызываемого RPC-метода;
+    req interface{} — запрос;
+    reply interface{} — ответ;
+    cc *grpc.ClientConn — клиентское соединение с сервером;
+    invoker grpc.UnaryInvoker — метод вызова RPC, нужно вызвать эту функцию для выполнения RPC-метода;
+    opts ...grpc.CallOption — параметры типа grpc.CallOption, используемые для настройки вызова gRPC.
+    Вот простейшая функция-перехватчик:
+
+    func clientInterceptor(ctx context.Context, method string, req interface{},
+        reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker,
+        opts ...grpc.CallOption) error {
+        // выполняем действия перед вызовом метода
+        start := time.Now()
+
+        // вызываем RPC-метод
+        err := invoker(ctx, method, req, reply, cc, opts...)
+
+        // выполняем действия после вызова метода
+        if err != nil {
+            log.Printf("[ERROR] %s,%v", method, err)
+        } else {
+            log.Printf("[INFO] %s,%v", method, time.Since(start))
+        }
+        return err
+    }
+
+    Для подключения функции-перехватчика нужно использовать функцию WithUnaryInterceptor(f UnaryClientInterceptor) DialOption.
+
+
+conn, err := grpc.Dial(grpcUri, grpc.WithTransportCredentials(insecure.NewCredentials()),
+    grpc.WithUnaryInterceptor(clientInterceptor))
+
+    Аналогичные функции есть и для подключения функции-перехватчика на сервере:
+    StreamInterceptor(i StreamServerInterceptor) ServerOption — потоковое RPC;
+    UnaryInterceptor(i UnaryServerInterceptor) ServerOption — унарное RPC.
+    Например, создание сервера с перехватчиком может выглядеть так:
+
+    s := grpc.NewServer(grpc.UnaryInterceptor(myUnaryInterceptor))
+
+    По умолчанию эти функции позволяют подключить только одну функцию-перехватчик. Если требуется использовать несколько перехватчиков, их нужно указать в соответствующей функции:
+    WithChainStreamInterceptor(interceptors ...StreamClientInterceptor) DialOption — потоковое RPC для клиента;
+    WithChainUnaryInterceptor(interceptors ...UnaryClientInterceptor) DialOption — унарное RPC для клиента;
+    ChainStreamInterceptor(interceptors ...StreamServerInterceptor) ServerOption — потоковое RPC для сервера;
+    ChainUnaryInterceptor(interceptors ...UnaryServerInterceptor) ServerOption — унарное RPC для сервера.
+    Существует большое количество функций, которые передают опциональные параметры в:
+    Dial(target string, opts ...DialOption) (*ClientConn, error) — для клиента;
+    NewServer(opt ...ServerOption) *Server — для сервера.
+    Например, кроме вышеупомянутых функций, для установки перехватчиков на сервер используются:
+    MaxConcurrentStreams(n uint32) ServerOption — устанавливает ограничение на количество одновременных потоков;
+    MaxRecvMsgSize(m int) ServerOption — устанавливает максимальный размер сообщения, которое сервер может получить;
+    MaxSendMsgSize(m int) ServerOption — устанавливает максимальный размер сообщения, которое сервер может отправить.
+    А вот эти функции применяются для настройки gRPC-клиента:
+    WithConnectParams(p ConnectParams) DialOption — определяет параметры соединения;
+    WithTransportCredentials(creds credentials.TransportCredentials) DialOption — настраивает учётные данные уровня безопасности соединения (например, TLS/SSL);
+    WithUserAgent(s string) DialOption — определяет значение user agent для всех RPC.
+    Есть репозиторий github.com/grpc-ecosystem/go-grpc-middleware с готовыми перехватчиками для самых разных целей: аутентификации, логирования, мониторинга и т. д.
+
+Добавьте в существующий gRPC-сервер перехватчик, который будет проверять наличие ключа token в метаданных запросов. При отсутствии токена нужно возвращать ошибку с кодом codes.Unauthenticated и текстом missing token. Если токен не равен константе SecretToken, то ошибка отличается только текстом: invalid token
+
+const SecretToken = "secret_token"
+
+func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+    // допишите код
+    // ...
+}
+
+func main() {
+    listen, err := net.Listen("tcp", ":3200")
+    if err != nil {
+        log.Fatal(err)
+    }
+    // добавьте к серверу перехватчик
+    // s := grpc.NewServer(...)
+
+    pb.RegisterUsersServer(s, &UsersServer{})
+    fmt.Println("gRPC server starts")
+    if err := s.Serve(listen); err != nil {
+        log.Fatal(err)
+    }
+}
+
+func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+    var token string
+    if md, ok := metadata.FromIncomingContext(ctx); ok {
+        values := md.Get("token")
+        if len(values) > 0 {
+            token = values[0]
+        }
+    }
+    if len(token) == 0 {
+        return nil, status.Error(codes.Unauthenticated, "missing token")
+    }
+    if token != SecretToken {
+        return nil, status.Error(codes.Unauthenticated, "invalid token")
+    }
+    return handler(ctx, req)
+}
+
+func main() {
+    listen, err := net.Listen("tcp", ":3200")
+    if err != nil {
+        log.Fatal(err)
+    }
+    s := grpc.NewServer(grpc.UnaryInterceptor(unaryInterceptor))
+
+    pb.RegisterUsersServer(s, &UsersServer{})
+    fmt.Println("gRPC server starts")
+    if err := s.Serve(listen); err != nil {
+        log.Fatal(err)
+    }
+}
+
+https://pkg.go.dev/google.golang.org/grpc
+https://grpc.io/docs/languages/go/basics/
+https://sahansera.dev/introduction-to-grpc/
+https://shijuvar.medium.com/writing-grpc-interceptors-in-go-bf3e7671fe48
+https://dev.to/davidsbond/golang-creating-grpc-interceptors-5el5
+https://github.com/grpc-ecosystem/go-grpc-middleware
+https://grpc.github.io/grpc/core/md_doc_statuscodes.html
+https://github.com/grpc-ecosystem/awesome-grpc
+
+
