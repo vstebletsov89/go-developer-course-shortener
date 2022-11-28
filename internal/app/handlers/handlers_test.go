@@ -66,7 +66,7 @@ func createFileRepository(t *testing.T) (string, string) {
 
 func AuthHandleMock(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), middleware.UserCtx, "4b003ed0-4d8f-46eb-8322-e90174110517")
+		ctx := context.WithValue(r.Context(), service.UserCtx, "4b003ed0-4d8f-46eb-8322-e90174110517")
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

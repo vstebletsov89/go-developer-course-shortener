@@ -2,8 +2,14 @@ package handlers
 
 import (
 	"context"
+	"github.com/google/uuid"
 	"go-developer-course-shortener/internal/app/service"
 	pb "go-developer-course-shortener/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+	"log"
 )
 
 type ShortenerServer struct {
@@ -80,4 +86,40 @@ func (s *ShortenerServer) Ping(ctx context.Context, in *pb.PingRequest) (*pb.Pin
 
 	var response pb.PingResponse
 	return &response, nil
+}
+
+func UnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	userID := uuid.NewString()
+	validAccessToken := false
+
+	var token string
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		values := md.Get(service.AccessToken)
+		if len(values) > 0 {
+			token = values[0]
+			if decrypted, err := service.Decrypt(token); err == nil {
+				userID = decrypted
+				log.Printf("Decrypted userID (GRPC): '%s'", userID)
+				validAccessToken = true
+			}
+		}
+	}
+
+	if !validAccessToken {
+		// token not found or not valid
+		encrypted, err := service.Encrypt(userID)
+		if err != nil {
+			return nil, status.Error(codes.Unauthenticated, "invalid token")
+		}
+		log.Printf("Set metadata '%s' for current userID: '%s'", encrypted, userID)
+		md := metadata.New(map[string]string{service.AccessToken: encrypted})
+		ctx = metadata.NewOutgoingContext(context.Background(), md)
+	}
+
+	header := metadata.Pairs(service.AccessToken, userID)
+	if err := grpc.SendHeader(ctx, header); err != nil {
+		return nil, err
+	}
+
+	return handler(ctx, req)
 }

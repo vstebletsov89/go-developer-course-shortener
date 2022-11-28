@@ -111,7 +111,7 @@ func main() {
 			log.Fatalf("GRPC server net.Listen: %v", err)
 		}
 
-		grpcSrv = grpc.NewServer()
+		grpcSrv = grpc.NewServer(grpc.UnaryInterceptor(handlers.UnaryInterceptor))
 		pb.RegisterShortenerServer(grpcSrv, handlers.NewGrpcHandler(svc))
 
 		log.Printf("GRPC server started on %v", config.GrpcPort)

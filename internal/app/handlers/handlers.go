@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/rand"
 	"go-developer-course-shortener/internal/app/service"
 	"go-developer-course-shortener/internal/app/types"
@@ -39,7 +38,7 @@ func NewHTTPHandler(service *service.Service) *Handler {
 }
 
 func extractUserID(r *http.Request) string {
-	userID, ok := r.Context().Value(middleware.UserCtx).(string)
+	userID, ok := r.Context().Value(service.UserCtx).(string)
 	if ok {
 		log.Printf("userID: %s", userID)
 		return userID

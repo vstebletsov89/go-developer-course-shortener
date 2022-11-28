@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/service"
 	"go-developer-course-shortener/internal/configs"
@@ -37,7 +36,7 @@ func testBenchmarkRequest(b *testing.B, ts *httptest.Server, method, path string
 
 func AuthHandleMockBenchmark(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), middleware.UserCtx, "4b003ed0-4d8f-46eb-8322-e90174110517")
+		ctx := context.WithValue(r.Context(), service.UserCtx, "4b003ed0-4d8f-46eb-8322-e90174110517")
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
