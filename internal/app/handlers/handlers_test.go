@@ -8,11 +8,13 @@ import (
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/repository/mocks"
+	"go-developer-course-shortener/internal/app/service"
 	"go-developer-course-shortener/internal/app/types"
 	"go-developer-course-shortener/internal/configs"
 	"go-developer-course-shortener/internal/worker"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -35,6 +37,7 @@ func testRequest(t *testing.T, ts *httptest.Server, method, path string, body io
 		},
 	}
 
+	req.Header.Set("X-Real-IP", "localhost:8080")
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
 
@@ -79,7 +82,18 @@ func NewRouter(config *configs.Config, auth ...bool) chi.Router {
 	default:
 		storage = repository.NewInMemoryRepository()
 	}
-	handler := NewHTTPHandler(config, storage)
+
+	// setup worker pool to handle delete requests
+	jobs := make(chan worker.Job, worker.MaxWorkerPoolSize)
+	workerPool := worker.NewWorkerPool(storage, jobs)
+	go workerPool.Run(context.Background())
+
+	network := net.IPNet{
+		IP:   []byte("localhost:8080"),
+		Mask: nil,
+	}
+	svc := service.NewService(storage, jobs, &network, config.BaseURL)
+	handler := NewHTTPHandler(svc)
 
 	log.Printf("Server started on %v", config.ServerAddress)
 	r := chi.NewRouter()
@@ -89,11 +103,6 @@ func NewRouter(config *configs.Config, auth ...bool) chi.Router {
 		r.Use(AuthHandleMock)
 	}
 
-	// setup worker pool to handle delete requests
-	jobs := make(chan worker.Job, worker.MaxWorkerPoolSize)
-	workerPool := worker.NewWorkerPool(storage, jobs)
-	go workerPool.Run(context.Background())
-
 	// routing
 	r.Post("/", handler.HandlerPOST)
 	r.Post("/api/shorten", handler.HandlerJSONPOST)
@@ -101,7 +110,7 @@ func NewRouter(config *configs.Config, auth ...bool) chi.Router {
 	r.Get("/{ID}", handler.HandlerGET)
 	r.Get("/api/user/urls", handler.HandlerUserStorageGET)
 	r.Get("/ping", handler.HandlerPing)
-	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(jobs))
+	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE())
 	r.Get("/api/internal/stats", handler.HandlerStats)
 
 	return r

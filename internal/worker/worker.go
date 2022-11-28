@@ -55,20 +55,6 @@ func (p *Pool) Run(ctx context.Context) {
 			log.Printf("Done normal job %v", v)
 		case <-ctx.Done():
 			log.Println("Worker pool context done")
-			// range input channel until that channel closes
-			for v := range p.inputCh {
-				wg.Add(1)
-				log.Printf("Process shutdown job %v", v)
-				go func(j Job) {
-					defer wg.Done()
-					if err := p.repository.DeleteURLS(ctx, j.UserID, j.ShortURLS); err != nil {
-						log.Println(err)
-						return
-					}
-				}(v)
-				wg.Wait()
-				log.Printf("Done shutdown job %v", v)
-			}
 			return
 		}
 	}

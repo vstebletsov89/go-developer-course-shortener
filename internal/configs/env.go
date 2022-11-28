@@ -22,6 +22,7 @@ type Config struct {
 	EnableHTTPS     bool   `env:"ENABLE_HTTPS" envDefault:"false" json:"enable_https"`
 	Config          string `env:"CONFIG" envDefault:""`
 	TrustedSubnet   string `env:"TRUSTED_SUBNET" envDefault:"" json:"trusted_subnet"`
+	GrpcPort        int    `env:"GRPC_PORT" envDefault:"3200" json:"grpc_port"`
 }
 
 var once sync.Once
@@ -35,6 +36,7 @@ func (c *Config) readCommandLineArgs() {
 		flag.BoolVar(&c.EnableHTTPS, "s", c.EnableHTTPS, "enable https mode")
 		flag.StringVar(&c.Config, "c", c.Config, "json config path")
 		flag.StringVar(&c.TrustedSubnet, "t", c.TrustedSubnet, "enable trusted subnet mode")
+		flag.IntVar(&c.GrpcPort, "g", c.GrpcPort, "grpc port")
 		flag.Parse()
 	})
 }
@@ -85,6 +87,9 @@ func ReadConfig() (*Config, error) {
 		}
 		if !cfg.EnableHTTPS && fileConfig.EnableHTTPS {
 			cfg.EnableHTTPS = fileConfig.EnableHTTPS
+		}
+		if cfg.GrpcPort == 3200 && fileConfig.GrpcPort > 0 {
+			cfg.GrpcPort = fileConfig.GrpcPort
 		}
 	}
 

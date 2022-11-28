@@ -7,9 +7,14 @@ import (
 	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/repository/postgres"
+	"go-developer-course-shortener/internal/app/service"
 	"go-developer-course-shortener/internal/configs"
 	"go-developer-course-shortener/internal/worker"
+	pb "go-developer-course-shortener/proto"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -37,8 +42,11 @@ func main() {
 		log.Fatalf("Failed to read server configuration. Error: %v", err.Error())
 	}
 
-	// Server run context
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// error group to control server instances
+	g, ctx := errgroup.WithContext(ctx)
 
 	var storage repository.Repository
 	switch {
@@ -63,57 +71,92 @@ func main() {
 	workerPool := worker.NewWorkerPool(storage, jobs)
 	go workerPool.Run(ctx)
 
-	srv := http.Server{Addr: config.ServerAddress, Handler: service(jobs, config, storage)}
+	_, subnet, err := net.ParseCIDR(config.TrustedSubnet)
+	if err != nil {
+		log.Printf("Failed to read trusted subnet parameter. Error: %v", err.Error())
+	}
 
-	connClosed := make(chan struct{})
+	// create new service for all servers
+	svc := service.NewService(storage, jobs, subnet, config.BaseURL)
+	var httpSrv http.Server
+	var grpcSrv *grpc.Server
+
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 
-	go func() {
-		<-sigint
+	// start http/https server
+	g.Go(func() error {
+		httpSrv = http.Server{Addr: config.ServerAddress, Handler: NewHTTPHandler(svc)}
+		if config.EnableHTTPS {
+			// start https server
+			log.Printf("HTTPS server started on %v", config.ServerAddress)
+			// certificate and key were created by crypto/x509 package
+			if err := httpSrv.ListenAndServeTLS("cert.pem", "key.pem"); err != http.ErrServerClosed {
+				log.Fatalf("HTTPS server ListenAndServe: %v", err)
+			}
+		} else {
+			// start http server
+			log.Printf("HTTP server started on %v", config.ServerAddress)
+			if err := httpSrv.ListenAndServe(); err != http.ErrServerClosed {
+				log.Fatalf("HTTP server ListenAndServe: %v", err)
+			}
+		}
+		return nil
+	})
 
-		// graceful shutdown
-		if err := srv.Shutdown(ctx); err != nil {
-			log.Fatalf("HTTP/HTTPS server Shutdown: %v", err)
+	// start grpc server
+	g.Go(func() error {
+		listen, err := net.Listen("tcp", fmt.Sprintf(":%d", config.GrpcPort))
+		if err != nil {
+			log.Fatalf("GRPC server net.Listen: %v", err)
 		}
 
-		// connection closed
-		close(connClosed)
+		grpcSrv = grpc.NewServer()
+		pb.RegisterShortenerServer(grpcSrv, handlers.NewGrpcHandler(svc))
 
-		// stop server context and release resources
-		cancel()
-
-		// close worker pool
-		workerPool.ClosePool()
-	}()
-
-	if config.EnableHTTPS {
-		// start https server
-		log.Printf("HTTPS server started on %v", config.ServerAddress)
-		// certificate and key were created by crypto/x509 package
-		if err := srv.ListenAndServeTLS("cert.pem", "key.pem"); err != http.ErrServerClosed {
-			log.Fatalf("HTTPS server ListenAndServe: %v", err)
+		log.Printf("GRPC server started on %v", config.GrpcPort)
+		// start grc server
+		if err := grpcSrv.Serve(listen); err != nil {
+			log.Fatal(err)
 		}
-	} else {
-		// start http server
-		log.Printf("HTTP server started on %v", config.ServerAddress)
-		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-			log.Fatalf("HTTP server ListenAndServe: %v", err)
-		}
+		return nil
+	})
+
+	select {
+	case <-sigint:
+		break
+	case <-ctx.Done():
+		break
 	}
 
-	// wait for graceful shutdown
-	<-connClosed
+	// graceful shutdown
+	if err := httpSrv.Shutdown(ctx); err != nil {
+		log.Fatalf("HTTP/HTTPS server Shutdown: %v", err)
+	}
+
+	grpcSrv.GracefulStop()
+
+	// stop server context and release resources
+	cancel()
+
+	// close worker pool
+	workerPool.ClosePool()
+
 	// release resources
 	storage.ReleaseStorage()
 	log.Println("Server Shutdown gracefully")
+
+	err = g.Wait()
+	if err != nil {
+		log.Fatalf("error group: %v", err)
+	}
 }
 
-func service(job chan worker.Job, config *configs.Config, storage repository.Repository) http.Handler {
-	handler := handlers.NewHTTPHandler(config, storage)
+func NewHTTPHandler(svc *service.Service) http.Handler {
+	handler := handlers.NewHTTPHandler(svc)
 
 	r := chi.NewRouter()
-	r.Use(middleware.GzipHandle, middleware.AuthHandle, middleware.TrustedSubnetHandle(config.TrustedSubnet))
+	r.Use(middleware.GzipHandle, middleware.AuthHandle)
 
 	// routing
 	r.Post("/", handler.HandlerPOST)
@@ -122,7 +165,7 @@ func service(job chan worker.Job, config *configs.Config, storage repository.Rep
 	r.Get("/{ID}", handler.HandlerGET)
 	r.Get("/api/user/urls", handler.HandlerUserStorageGET)
 	r.Get("/ping", handler.HandlerPing)
-	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE(job))
+	r.Delete("/api/user/urls", handler.HandlerUseStorageDELETE())
 	r.Get("/api/internal/stats", handler.HandlerStats)
 
 	return r

@@ -20,14 +20,14 @@ func TestReadConfig(t *testing.T) {
 	}{
 		{
 			name:         "read config with defaults",
-			want:         &Config{ServerAddress: "localhost:8080", BaseURL: "http://localhost:8080", FileStoragePath: "", DatabaseDsn: "", EnableHTTPS: false, TrustedSubnet: ""},
+			want:         &Config{ServerAddress: "localhost:8080", BaseURL: "http://localhost:8080", FileStoragePath: "", DatabaseDsn: "", EnableHTTPS: false, TrustedSubnet: "", GrpcPort: 3200},
 			jsonConfig:   nil,
 			deleteConfig: false,
 			wantErr:      false,
 		},
 		{
 			name: "read config from json config",
-			want: &Config{ServerAddress: "host:9090", BaseURL: "https://baseurl", FileStoragePath: "/path/to/file.db", DatabaseDsn: "databaseConnectionString", EnableHTTPS: true, TrustedSubnet: "192.168.0.15/24"},
+			want: &Config{ServerAddress: "host:9090", BaseURL: "https://baseurl", FileStoragePath: "/path/to/file.db", DatabaseDsn: "databaseConnectionString", EnableHTTPS: true, TrustedSubnet: "192.168.0.15/24", GrpcPort: 999},
 			jsonConfig: map[string]interface{}{
 				"server_address":    "host:9090",
 				"base_url":          "https://baseurl",
@@ -35,6 +35,7 @@ func TestReadConfig(t *testing.T) {
 				"database_dsn":      "databaseConnectionString",
 				"enable_https":      true,
 				"trusted_subnet":    "192.168.0.15/24",
+				"grpc_port":         999,
 			},
 			deleteConfig: false,
 			wantErr:      false,
@@ -92,7 +93,7 @@ func TestReadConfig(t *testing.T) {
 
 			if !tt.wantErr {
 				testConfig := &Config{ServerAddress: got.ServerAddress, BaseURL: got.BaseURL, FileStoragePath: got.FileStoragePath, DatabaseDsn: got.DatabaseDsn, EnableHTTPS: got.EnableHTTPS,
-					TrustedSubnet: got.TrustedSubnet}
+					TrustedSubnet: got.TrustedSubnet, GrpcPort: got.GrpcPort}
 				if !reflect.DeepEqual(testConfig, tt.want) {
 					t.Errorf("ReadConfig() got = %v, want %v", testConfig, tt.want)
 				}
