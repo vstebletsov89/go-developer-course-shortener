@@ -21,6 +21,7 @@ type Service struct {
 	job     chan worker.Job
 	network *net.IPNet
 	BaseURL string
+	users   sync.Map
 }
 
 // UserContextType user context type.
