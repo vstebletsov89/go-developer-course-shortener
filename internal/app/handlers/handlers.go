@@ -4,8 +4,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
-	"fmt"
+	"github.com/go-chi/chi/v5"
 	"go-developer-course-shortener/internal/app/rand"
 	"go-developer-course-shortener/internal/app/service"
 	"go-developer-course-shortener/internal/app/types"
@@ -13,11 +12,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgerrcode"
 )
 
 const (
@@ -37,15 +31,6 @@ func NewHTTPHandler(service *service.Service) *Handler {
 	return &Handler{service: service}
 }
 
-func extractUserID(r *http.Request) string {
-	userID, ok := r.Context().Value(service.UserCtx).(string)
-	if ok {
-		log.Printf("userID: %s", userID)
-		return userID
-	}
-	return ""
-}
-
 // HandlerBatchPOST implements saving list of urls to the repository.
 func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
 	var request types.RequestBatch
@@ -55,12 +40,12 @@ func (h *Handler) HandlerBatchPOST(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Request batch JSON: %+v", request)
 
-	userID := extractUserID(r)
+	userID := service.ExtractUserIDFromContext(r.Context())
 
 	batchLinks := make(types.BatchLinks, len(request)) // allocate required capacity for the links
 	for i, v := range request {
 		id := string(rand.GenerateRandom(shortLinkLength))
-		shortURL := makeShortURL(h.service.BaseURL, id)
+		shortURL := service.MakeShortURL(h.service.BaseURL, id)
 		batchLinks[i] = types.BatchLink{CorrelationID: v.CorrelationID, ShortURL: shortURL, OriginalURL: v.OriginalURL}
 	}
 
@@ -107,20 +92,20 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Request JSON: %+v", request)
 
 	log.Printf("Long URL: %v", request.URL)
-	longURL, err := parseURL(request.URL)
+	longURL, err := service.ParseURL(request.URL)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	userID := extractUserID(r)
+	userID := service.ExtractUserIDFromContext(r.Context())
 
 	id := string(rand.GenerateRandom(shortLinkLength))
-	shortURL := makeShortURL(h.service.BaseURL, id)
+	shortURL := service.MakeShortURL(h.service.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
 
 	err = h.service.SaveURL(userID, shortURL, longURL)
-	status, err := checkDBViolation(err)
+	status, err := service.CheckDBViolation(err)
 	if err != nil {
 		http.Error(w, err.Error(), status)
 		return
@@ -157,16 +142,6 @@ func (h *Handler) HandlerJSONPOST(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func checkDBViolation(err error) (int, error) {
-	var pgError *pgconn.PgError
-	if errors.As(err, &pgError) && pgError.Code == pgerrcode.UniqueViolation {
-		return http.StatusConflict, nil
-	} else if err != nil {
-		return http.StatusInternalServerError, err
-	}
-	return http.StatusCreated, nil
-}
-
 // HandlerPOST implements saving short and original url to the repository.
 func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
@@ -176,20 +151,20 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Long URL: %v", string(body))
-	longURL, err := parseURL(string(body))
+	longURL, err := service.ParseURL(string(body))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	userID := extractUserID(r)
+	userID := service.ExtractUserIDFromContext(r.Context())
 
 	id := string(rand.GenerateRandom(shortLinkLength))
-	shortURL := makeShortURL(h.service.BaseURL, id)
+	shortURL := service.MakeShortURL(h.service.BaseURL, id)
 	log.Printf("Short URL: %v", shortURL)
 
 	err = h.service.SaveURL(userID, shortURL, longURL)
-	status, err := checkDBViolation(err)
+	status, err := service.CheckDBViolation(err)
 	if err != nil {
 		http.Error(w, err.Error(), status)
 		return
@@ -215,7 +190,7 @@ func (h *Handler) HandlerPOST(w http.ResponseWriter, r *http.Request) {
 // HandlerUseStorageDELETE implements deleting short urls for current user id.
 func (h *Handler) HandlerUseStorageDELETE() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := extractUserID(r)
+		userID := service.ExtractUserIDFromContext(r.Context())
 		log.Printf("Delete all links for userID: %s", userID)
 
 		var deleteURLS []string
@@ -227,7 +202,7 @@ func (h *Handler) HandlerUseStorageDELETE() http.HandlerFunc {
 
 		shortURLS := make([]string, len(deleteURLS)) // allocate required capacity for the links
 		for i, id := range deleteURLS {
-			shortURLS[i] = makeShortURL(h.service.BaseURL, id)
+			shortURLS[i] = service.MakeShortURL(h.service.BaseURL, id)
 		}
 		log.Printf("Request shortURLS: %+v", shortURLS)
 
@@ -244,7 +219,7 @@ func (h *Handler) HandlerUseStorageDELETE() http.HandlerFunc {
 
 // HandlerUserStorageGET implements getting list of urls for current user id.
 func (h *Handler) HandlerUserStorageGET(w http.ResponseWriter, r *http.Request) {
-	userID := extractUserID(r)
+	userID := service.ExtractUserIDFromContext(r.Context())
 	log.Printf("Get all links for userID: %s", userID)
 	links, err := h.service.GetUserStorage(userID)
 	if err != nil {
@@ -271,7 +246,7 @@ func (h *Handler) HandlerGET(w http.ResponseWriter, r *http.Request) {
 	strID := chi.URLParam(r, "ID")
 	log.Printf("strID: `%s`", strID)
 
-	originalLink, err := h.service.GetURL(makeShortURL(h.service.BaseURL, strID))
+	originalLink, err := h.service.GetURL(service.MakeShortURL(h.service.BaseURL, strID))
 	if err != nil {
 		http.Error(w, "ID not found", http.StatusBadRequest)
 		return
@@ -312,20 +287,4 @@ func (h *Handler) HandlerPing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-}
-
-func makeShortURL(baseURL string, id string) string {
-	shortURL := fmt.Sprintf("%v/%s", baseURL, id)
-	return shortURL
-}
-
-func parseURL(strURL string) (string, error) {
-	longURL, err := url.Parse(strURL)
-	if err != nil {
-		return "", err
-	}
-	if longURL.String() == "" {
-		return "", errors.New("URL must not be empty")
-	}
-	return longURL.String(), nil
 }

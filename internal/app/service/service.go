@@ -1,17 +1,24 @@
 package service
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
+	"github.com/jackc/pgconn"
+	"github.com/jackc/pgerrcode"
 	"go-developer-course-shortener/internal/app/rand"
 	"go-developer-course-shortener/internal/app/repository"
 	"go-developer-course-shortener/internal/app/types"
 	"go-developer-course-shortener/internal/worker"
+	"google.golang.org/grpc/metadata"
 	"log"
 	"net"
+	"net/http"
+	"net/url"
 	"sync"
 )
 
@@ -21,7 +28,6 @@ type Service struct {
 	job     chan worker.Job
 	network *net.IPNet
 	BaseURL string
-	users   sync.Map
 }
 
 // UserContextType user context type.
@@ -172,4 +178,52 @@ func Decrypt(token string) (string, error) {
 		return "", err
 	}
 	return string(userID), nil
+}
+
+func ExtractUserIDFromContext(ctx context.Context) string {
+	// try to get userID from metadata
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		values := md.Get(AccessToken)
+		if len(values) > 0 {
+			userID := values[0]
+			log.Printf("ExtractUserIDFromContext (GRPC): '%s'", userID)
+			return userID
+		}
+		return ""
+	}
+
+	// if not in metadata try to find in context value
+	userID, ok := ctx.Value(UserCtx).(string)
+	if ok {
+		log.Printf("ExtractUserIDFromContext (HTTP): '%s'", userID)
+		return userID
+	}
+	return ""
+}
+
+func MakeShortURL(baseURL string, id string) string {
+	shortURL := fmt.Sprintf("%v/%s", baseURL, id)
+	return shortURL
+}
+
+func ParseURL(strURL string) (string, error) {
+	longURL, err := url.Parse(strURL)
+	if err != nil {
+		return "", err
+	}
+	if longURL.String() == "" {
+		return "", errors.New("URL must not be empty")
+	}
+	return longURL.String(), nil
+}
+
+func CheckDBViolation(err error) (int, error) {
+	var pgError *pgconn.PgError
+	if errors.As(err, &pgError) && pgError.Code == pgerrcode.UniqueViolation {
+		return http.StatusConflict, nil
+	} else if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	return http.StatusCreated, nil
 }

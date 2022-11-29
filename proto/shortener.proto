@@ -41,12 +41,14 @@ message AddLinkJSONRequest {
 }
 
 message AddLinkJSONResponse {
-  string result = 1;
+  int32 code = 1;
+  string result = 2;
 }
 
 message GetStatsResponse {
-  int32 urls = 1;
-  int32 users = 2;
+  int32 code = 1;
+  int32 urls = 2;
+  int32 users = 3;
 }
 
 message RequestBatchJSON {
@@ -64,7 +66,8 @@ message AddBatchRequest {
 }
 
 message AddBatchResponse {
-  repeated ResponseBatchJSON links = 1;
+  int32 code = 1;
+  repeated ResponseBatchJSON links = 2;
 }
 
 message AddLinkRequest {
@@ -99,7 +102,7 @@ message GetOriginalByShortRequest {
 
 message GetOriginalByShortResponse {
   int32 code = 1;
-  OriginalURL orig = 2;
+  OriginalLink link = 2;
 }
 
 message GetStatsRequest {
