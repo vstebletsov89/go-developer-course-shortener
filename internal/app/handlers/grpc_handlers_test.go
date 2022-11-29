@@ -204,6 +204,7 @@ func TestShortenerServer_All_Positive(t *testing.T) {
 
 	// GetOriginalByShort (positive test)
 	shortURL, err := url.Parse(linkResponse.Short.ShortUrl)
+	assert.NoError(t, err)
 	link := shortURL.Path
 	link = link[1:] // remove '/'
 	origResponse, err := c.GetOriginalByShort(ctx, &pb.GetOriginalByShortRequest{Short: &pb.ShortURL{ShortUrl: link}})
