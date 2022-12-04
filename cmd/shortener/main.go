@@ -122,12 +122,7 @@ func main() {
 		return nil
 	})
 
-	select {
-	case <-sigint:
-		break
-	case <-ctx.Done():
-		break
-	}
+	<-sigint
 
 	// graceful shutdown
 	if err := httpSrv.Shutdown(ctx); err != nil {
