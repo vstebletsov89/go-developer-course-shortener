@@ -1,6 +1,6 @@
 package types
 
-// Link represents a pair of short and original urls.
+// Link represents a pair of short and original urls for GetUserStorage handler.
 type Link struct {
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`

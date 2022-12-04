@@ -11,6 +11,12 @@ type ResponseJSON struct {
 	Result string `json:"result"`
 }
 
+// ResponseStatsJSON represents struct for stats json responses.
+type ResponseStatsJSON struct {
+	URLs  int `json:"urls"`
+	Users int `json:"users"`
+}
+
 // RequestBatchJSON represents a link for batch json requests.
 type RequestBatchJSON struct {
 	CorrelationID string `json:"correlation_id"`

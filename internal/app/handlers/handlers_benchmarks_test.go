@@ -3,9 +3,10 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"go-developer-course-shortener/internal/app/middleware"
 	"go-developer-course-shortener/internal/app/repository"
+	"go-developer-course-shortener/internal/app/service"
 	"go-developer-course-shortener/internal/configs"
+	"go-developer-course-shortener/internal/worker"
 	"io"
 	"log"
 	"net/http"
@@ -35,7 +36,7 @@ func testBenchmarkRequest(b *testing.B, ts *httptest.Server, method, path string
 
 func AuthHandleMockBenchmark(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), middleware.UserCtx, "4b003ed0-4d8f-46eb-8322-e90174110517")
+		ctx := context.WithValue(r.Context(), service.UserCtx, "4b003ed0-4d8f-46eb-8322-e90174110517")
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -47,7 +48,13 @@ func NewRouterBenchmark(config *configs.Config) chi.Router {
 	} else {
 		storage = repository.NewInMemoryRepository()
 	}
-	handler := NewHTTPHandler(config, storage)
+	// setup worker pool to handle delete requests
+	jobs := make(chan worker.Job, worker.MaxWorkerPoolSize)
+	workerPool := worker.NewWorkerPool(storage, jobs)
+	go workerPool.Run(context.Background())
+
+	svc := service.NewService(storage, jobs, nil, config.BaseURL)
+	handler := NewHTTPHandler(svc)
 
 	log.Printf("Server started on %v", config.ServerAddress)
 	r := chi.NewRouter()
@@ -83,12 +90,18 @@ func BenchmarkSaveGetMemoryStorage(b *testing.B) {
 		resp, body := testBenchmarkRequest(b, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
 
 		shortURL, _ := url.Parse(body)
-		resp.Body.Close()
+		err := resp.Body.Close()
+		if err != nil {
+			return
+		}
 
 		// get original url
 		resp, _ = testBenchmarkRequest(b, ts, http.MethodGet, shortURL.Path, nil)
 
-		resp.Body.Close()
+		err = resp.Body.Close()
+		if err != nil {
+			return
+		}
 		counter++
 	}
 }
@@ -113,12 +126,18 @@ func BenchmarkSaveGetAllMemoryStorage(b *testing.B) {
 		// prepare short url
 		resp, _ := testBenchmarkRequest(b, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
 
-		resp.Body.Close()
+		err := resp.Body.Close()
+		if err != nil {
+			return
+		}
 
 		// get original url
 		resp, _ = testBenchmarkRequest(b, ts, http.MethodGet, "/api/user/urls", nil)
 
-		resp.Body.Close()
+		err = resp.Body.Close()
+		if err != nil {
+			return
+		}
 		counter++
 	}
 }

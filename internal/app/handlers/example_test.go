@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"go-developer-course-shortener/internal/app/repository"
+	"go-developer-course-shortener/internal/app/service"
 	"go-developer-course-shortener/internal/app/types"
 	"go-developer-course-shortener/internal/configs"
+	"go-developer-course-shortener/internal/worker"
 	"io"
 	"log"
 	"net/http"
@@ -35,7 +38,8 @@ func exampleRequest(t *testing.T, ts *httptest.Server, method, path string, body
 
 	respBody, err := io.ReadAll(resp.Body)
 	assert.NoError(t, err)
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	assert.NoError(t, err)
 
 	return resp, string(respBody)
 }
@@ -47,7 +51,13 @@ func NewExampleRouter(config *configs.Config) chi.Router {
 	} else {
 		storage = repository.NewInMemoryRepository()
 	}
-	handler := NewHTTPHandler(config, storage)
+	// setup worker pool to handle delete requests
+	jobs := make(chan worker.Job, worker.MaxWorkerPoolSize)
+	workerPool := worker.NewWorkerPool(storage, jobs)
+	go workerPool.Run(context.Background())
+
+	svc := service.NewService(storage, jobs, nil, config.BaseURL)
+	handler := NewHTTPHandler(svc)
 
 	log.Printf("Server started on %v", config.ServerAddress)
 	r := chi.NewRouter()
@@ -76,7 +86,10 @@ func ExampleHandler_HandlerPing() {
 
 	// try to ping connection
 	resp, _ := exampleRequest(nil, ts, http.MethodGet, "/ping", nil)
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	if err != nil {
+		return
+	}
 
 	fmt.Println(resp.StatusCode)
 
@@ -99,15 +112,24 @@ func ExampleHandler_HandlerUserStorageGET() {
 		// prepare short url
 		originalURL := "https://github.com/test_repo" + strconv.Itoa(i)
 		resp, _ := exampleRequest(nil, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-		resp.Body.Close()
+		err := resp.Body.Close()
+		if err != nil {
+			return
+		}
 	}
 
 	// get original urls
 	resp, body := exampleRequest(nil, ts, http.MethodGet, "/api/user/urls", nil)
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	if err != nil {
+		return
+	}
 
 	var response []types.Link
-	json.Unmarshal([]byte(body), &response)
+	err = json.Unmarshal([]byte(body), &response)
+	if err != nil {
+		return
+	}
 
 	fmt.Println(resp.StatusCode)
 
@@ -128,7 +150,10 @@ func ExampleHandler_HandlerPOST() {
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, _ := exampleRequest(nil, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	if err != nil {
+		return
+	}
 
 	fmt.Println(resp.StatusCode)
 
@@ -149,12 +174,18 @@ func ExampleHandler_HandlerGET() {
 	// prepare short url
 	originalURL := "https://github.com/test_repo1"
 	resp, body := exampleRequest(nil, ts, http.MethodPost, "/", bytes.NewBufferString(originalURL))
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	if err != nil {
+		return
+	}
 	shortURL, _ := url.Parse(body)
 
 	// get original url
 	resp, _ = exampleRequest(nil, ts, http.MethodGet, shortURL.Path, nil)
-	defer resp.Body.Close()
+	err = resp.Body.Close()
+	if err != nil {
+		return
+	}
 
 	fmt.Println(resp.Header.Get("Location"))
 
@@ -174,10 +205,16 @@ func ExampleHandler_HandlerJSONPOST() {
 
 	// prepare short url from json
 	resp, body := exampleRequest(nil, ts, http.MethodPost, "/api/shorten", bytes.NewBufferString(`{"url": "https://github.com/test_repo1"}`))
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	if err != nil {
+		return
+	}
 
 	var response types.ResponseJSON
-	json.Unmarshal([]byte(body), &response)
+	err = json.Unmarshal([]byte(body), &response)
+	if err != nil {
+		return
+	}
 
 	fmt.Println(resp.StatusCode)
 
@@ -198,10 +235,16 @@ func ExampleHandler_HandlerBatchPOST() {
 	// prepare short url from json
 	resp, body := exampleRequest(nil, ts, http.MethodPost, "/api/shorten/batch",
 		bytes.NewBufferString(`[{"url": "https://github.com/test_repo1"},{"url": "https://github.com/test_repo2"},{"url": "https://github.com/test_repo3"}]`))
-	defer resp.Body.Close()
+	err := resp.Body.Close()
+	if err != nil {
+		return
+	}
 
 	var response types.ResponseBatch
-	json.Unmarshal([]byte(body), &response)
+	err = json.Unmarshal([]byte(body), &response)
+	if err != nil {
+		return
+	}
 
 	fmt.Println(resp.StatusCode)
 

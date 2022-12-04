@@ -17,10 +17,39 @@ type FileRepository struct {
 	file            *os.File
 }
 
+// check that FileRepository implements all required methods
+var _ Repository = (*FileRepository)(nil)
+
 type fileRecord struct {
 	UserID      string `json:"user_id"`
 	ID          string `json:"id"`
 	OriginalURL string `json:"original_url"`
+}
+
+func (r *FileRepository) GetInternalStats() (int, int, error) {
+	urls := make(map[string]string)
+	users := make(map[string]string)
+	var err error
+	r.file, err = os.OpenFile(r.fileStoragePath, os.O_RDONLY|os.O_CREATE, 0777)
+	if err != nil {
+		return len(urls), len(users), err
+	}
+	defer r.ReleaseStorage()
+
+	decoder := json.NewDecoder(r.file)
+	for {
+		record := &fileRecord{}
+		if err := decoder.Decode(&record); err == io.EOF {
+			break
+		} else if err != nil {
+			return len(urls), len(users), err
+		}
+
+		log.Printf("Record from file (GetInternalStats): %+v", record)
+		urls[record.ID] = record.OriginalURL
+		users[record.UserID] = record.ID
+	}
+	return len(urls), len(users), err
 }
 
 func (r *FileRepository) SaveURL(userID string, shortURL string, originalURL string) error {
